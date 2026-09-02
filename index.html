@@ -38,7 +38,7 @@
     }
 
     .word {
-      font-size: clamp(1.5rem, 7.6vw, 6.5rem);
+      font-size: clamp(1.1rem, 6.8vw, 5rem);
       font-weight: 700;
       letter-spacing: 0.04em;
       white-space: nowrap;
@@ -66,31 +66,25 @@
       pointer-events: none;
     }
 
-    /* links rise up from beneath the final ZZZ row, matching its style */
-    .links {
+    /* link rows sit on the SAME monospace grid as the Z's — one char per cell,
+       same size, columns aligned underneath (the ZZ lines up with the Z's) */
+    .pivot .linkrow {
       position: absolute;
       left: 50%;
-      top: calc(50% + 4.5rem);
-      transform: translateX(-50%);
+      top: 50%;
       display: flex;
-      gap: clamp(1.6rem, 6vw, 4.5rem);
-      align-items: center;
-      pointer-events: none;
-    }
-    .links a {
-      font-weight: 800;
-      font-size: clamp(1rem, 3.4vw, 2rem);
-      letter-spacing: 0.05em;
+      white-space: nowrap;
       color: var(--green);
       text-decoration: none;
-      white-space: nowrap;
-      text-shadow: 0 0 0.4em rgba(124, 255, 176, 0.35);
+      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.4);
       opacity: 0;
+      pointer-events: none;
       will-change: transform, opacity;
       transition: text-shadow 0.2s ease, filter 0.2s ease;
     }
-    .links a:hover {
-      text-shadow: 0 0 0.8em rgba(124, 255, 176, 0.85);
+    .pivot .linkrow .cell { display: inline-block; text-align: center; }
+    .pivot .linkrow:hover {
+      text-shadow: 0 0 0.8em rgba(124, 255, 176, 0.9);
       filter: brightness(1.15);
     }
 
@@ -122,10 +116,6 @@
       <div class="word" id="word" aria-label="injective">
         <span data-l>I</span><span class="pivot" id="pivot"><span class="n-glyph" id="nGlyph">N</span><span class="z-glyph" id="zGlyph">Z</span></span><span data-l>J</span><span data-l>E</span><span data-l>C</span><span data-l>T</span><span data-l>I</span><span data-l>V</span><span data-l>E</span>
       </div>
-      <nav class="links" id="links" aria-label="links">
-        <a href="https://pump.trippyinj.xyz/launch/382" target="_blank" rel="noopener">ZZCHART</a>
-        <a href="https://t.me/zztop_lol" target="_blank" rel="noopener">ZZTELEGRAM</a>
-      </nav>
     </div>
   </div>
   <div class="hint" id="hint">scroll ↓</div>
@@ -142,35 +132,62 @@
     const nGlyph = document.getElementById("nGlyph");
     const zGlyph = document.getElementById("zGlyph");
     const hint   = document.getElementById("hint");
-    const links  = document.getElementById("links");
-    const linkEls = [...links.querySelectorAll("a")];
 
     // every letter except the pivot "n"
     const letters = [...word.querySelectorAll("span[data-l]")];
 
-    // build the spreading z's on each side of the pivot
-    const PER_SIDE = 3;      // z's added to each side
-    const GAP = 0.82;        // spacing between z's, in em
+    // ---- the sleeping Z row: 10 Z's (same length as ZZTELEGRAM), pivot in the middle ----
+    const LEFT = 4, RIGHT = 5;   // Z's added left / right of the morphed pivot Z (+1 pivot = 10)
+    const GAP = 0.95;            // monospace pitch shared by the Z's and the link rows, in em
     const sides = [];
-    for (let s = -1; s <= 1; s += 2) {
-      for (let k = 1; k <= PER_SIDE; k++) {
-        const el = document.createElement("span");
-        el.className = "zside";
-        el.textContent = "Z";
-        pivot.appendChild(el);
-        sides.push({ el, dir: s, k });
+    const addSide = (dir, k) => {
+      const el = document.createElement("span");
+      el.className = "zside";
+      el.textContent = "Z";
+      pivot.appendChild(el);
+      sides.push({ el, dir, k });
+    };
+    for (let k = 1; k <= LEFT; k++)  addSide(-1, k);
+    for (let k = 1; k <= RIGHT; k++) addSide(1, k);
+
+    // ---- link rows on the same grid, left-aligned under the leftmost Z ----
+    const ROWGAP = 1.2;          // vertical spacing between rows, in em
+    const LINKS = [
+      { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382" },
+      { text: "ZZTELEGRAM", href: "https://t.me/zztop_lol" },
+    ];
+    const linkRows = LINKS.map((L, i) => {
+      const a = document.createElement("a");
+      a.className = "linkrow";
+      a.href = L.href; a.target = "_blank"; a.rel = "noopener";
+      a.setAttribute("aria-label", L.text.toLowerCase());
+      for (const ch of L.text) {
+        const c = document.createElement("span");
+        c.className = "cell";
+        c.style.width = GAP + "em";
+        c.setAttribute("aria-hidden", "true");
+        c.textContent = ch;
+        a.appendChild(c);
       }
-    }
+      pivot.appendChild(a);
+      const centerCol = -LEFT + (L.text.length - 1) / 2;   // left-aligned at col -LEFT
+      return { a, centerCol, row: i + 1 };
+    });
+
+    // widest column the block reaches, used to center the whole thing on screen
+    const rightmostCol = Math.max(RIGHT, ...LINKS.map((L) => -LEFT + (L.text.length - 1)));
+    const blockCenterCol = (-LEFT + rightmostCol) / 2;
 
     let progress = 0, ticking = false, nOffset = 0;
 
     function measure() {
-      // horizontal distance from the n's resting spot to screen center,
-      // used to glide the z-cluster back on-screen as it spreads
+      // land the pivot so the whole grid block (Z row + link rows) is centered
       const prev = word.style.transform;
       word.style.transform = "none";
       const r = pivot.getBoundingClientRect();
-      nOffset = window.innerWidth / 2 - (r.left + r.width / 2);
+      const fontPx = parseFloat(getComputedStyle(word).fontSize) || 16;
+      const pitchPx = GAP * fontPx;
+      nOffset = (window.innerWidth / 2 - blockCenterCol * pitchPx) - (r.left + r.width / 2);
       word.style.transform = prev;
     }
 
@@ -207,28 +224,32 @@
       zGlyph.style.opacity = zIn.toFixed(3);
       zGlyph.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * zIn).toFixed(3)})`;
 
-      // --- Phase C: the z multiplies, spreading left and right (0.50 -> 0.72) ---
-      // glide the whole cluster to screen center so the growing row stays visible
-      const recenter = smooth(seg(p, 0.50, 0.72));
-      word.style.transform = `translateX(${(nOffset * recenter).toFixed(2)}px)`;
+      // --- Phase C: the z multiplies, spreading left and right (0.50 -> 0.74) ---
+      // glide the block to screen center, and lift it as the links settle in below
+      const recenter = smooth(seg(p, 0.50, 0.74));
+      const settle = smooth(seg(p, 0.74, 0.94));   // raise the group to balance the rows
+      word.style.transform =
+        `translate(${(nOffset * recenter).toFixed(2)}px, ${(-1.0 * settle).toFixed(3)}em)`;
 
       sides.forEach(({ el, dir, k }) => {
-        const start = 0.50 + (k - 1) * 0.05;         // inner z's spread first
-        const t = smooth(seg(p, start, Math.min(start + 0.22, 0.72)));
+        const start = 0.50 + (k - 1) * 0.03;         // inner z's spread first
+        const t = smooth(seg(p, start, Math.min(start + 0.18, 0.74)));
         const x = dir * t * k * GAP;                 // outward offset in em
         el.style.opacity = t.toFixed(3);
         el.style.transform =
           `translate(-50%, -50%) translateX(${x.toFixed(3)}em) scale(${(0.7 + 0.3 * t).toFixed(3)})`;
       });
 
-      // --- Phase D: the links rise up from beneath the ZZZ row (0.78 -> 0.95) ---
-      linkEls.forEach((el, i) => {
-        const start = 0.78 + i * 0.04;               // staggered, left one first
+      // --- Phase D: link rows rise up on the grid beneath the Z row (0.77 -> 0.97) ---
+      linkRows.forEach((L, i) => {
+        const start = 0.77 + i * 0.05;               // staggered, top row first
         const t = smooth(seg(p, start, start + 0.15));
-        el.style.opacity = t.toFixed(3);
-        el.style.transform = `translateY(${((1 - t) * 1.4).toFixed(2)}rem)`;
+        const y = L.row * ROWGAP + (1 - t) * 0.6;    // slide up into place
+        L.a.style.opacity = t.toFixed(3);
+        L.a.style.transform =
+          `translate(-50%, -50%) translate(${(L.centerCol * GAP).toFixed(3)}em, ${y.toFixed(3)}em)`;
+        L.a.style.pointerEvents = t > 0.6 ? "auto" : "none";
       });
-      links.style.pointerEvents = p > 0.82 ? "auto" : "none";
 
       ticking = false;
     }

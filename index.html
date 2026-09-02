@@ -3,109 +3,174 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>zzz</title>
-  <meta name="description" content="zzzzzzzzzz" />
+  <title>injective</title>
+  <meta name="description" content="injective" />
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: dark; --green: #7CFFB0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; }
+    html { scroll-behavior: auto; }
     body {
+      background: #0a0a0f;
+      color: var(--green);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow-x: hidden;
+    }
+
+    /* tall scene gives us scroll distance; the stage is pinned in the middle */
+    .scene { height: 420vh; position: relative; }
+    .stage {
+      position: sticky;
+      top: 0;
+      height: 100vh;
       display: grid;
       place-items: center;
-      min-height: 100dvh;
-      background: #0a0a0f;
-      color: #e8e8f0;
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       overflow: hidden;
-      cursor: pointer;
     }
-    .zzz {
-      font-size: clamp(3rem, 18vw, 16rem);
+
+    .word {
+      font-size: clamp(2rem, 10vw, 9rem);
       font-weight: 700;
       letter-spacing: 0.04em;
       white-space: nowrap;
       user-select: none;
-      color: #7CFFB0;
-      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.45);
+      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.4);
+      line-height: 1;
     }
-    /* characters still scrambling get a slightly dimmer green "decrypting" tint */
-    .zzz .scrambling {
-      color: #7CFFB0;
-      opacity: 0.8;
+    .word span { display: inline-block; will-change: transform, opacity, filter; }
+
+    /* the pivot reserves the "n" slot; z overlays are absolute so they never
+       shift the layout — the n stays exactly where it was */
+    .pivot { position: relative; }
+    .pivot .n-glyph { display: inline-block; }
+    .pivot .z-glyph,
+    .pivot .zside {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      pointer-events: none;
     }
-    .zzz.done {
-      /* start at the bright state (matches the just-finished text) so the
-         pulse eases down smoothly with no jump */
-      animation: breathe 4s ease-in-out infinite;
+
+    .hint {
+      position: fixed;
+      left: 50%;
+      bottom: 6vh;
+      transform: translateX(-50%);
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      animation: bob 2.2s ease-in-out infinite;
+      will-change: transform, opacity;
     }
-    @keyframes breathe {
-      0%, 100% { opacity: 1;    transform: scale(1); }
-      50%      { opacity: 0.65; transform: scale(0.992); }
+    @keyframes bob {
+      0%, 100% { transform: translate(-50%, 0); }
+      50%      { transform: translate(-50%, 6px); }
     }
+
     @media (prefers-reduced-motion: reduce) {
-      .zzz { animation: none !important; opacity: 1; }
+      .hint { animation: none; }
     }
   </style>
 </head>
 <body>
-  <main class="zzz" aria-label="zzzzzzzzzz"></main>
+  <div class="scene">
+    <div class="stage">
+      <div class="word" id="word" aria-label="injective">
+        <span data-l>i</span><span class="pivot" id="pivot"><span class="n-glyph" id="nGlyph">n</span><span class="z-glyph" id="zGlyph">z</span></span><span data-l>j</span><span data-l>e</span><span data-l>c</span><span data-l>t</span><span data-l>i</span><span data-l>v</span><span data-l>e</span>
+      </div>
+    </div>
+  </div>
+  <div class="hint" id="hint">scroll ↓</div>
 
   <script>
-    const TARGET = "zzzzzzzzzz";
-    const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!<>-_\\/[]{}=+*^?#@%&";
-    const el = document.querySelector(".zzz");
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    // normalize v into 0..1 across [a,b]
+    const seg = (v, a, b) => clamp((v - a) / (b - a), 0, 1);
+    const smooth = (t) => t * t * (3 - 2 * t);
 
-    const rand = (n) => Math.floor(Math.random() * n);
-    const glyph = () => GLYPHS[rand(GLYPHS.length)];
+    const scene  = document.querySelector(".scene");
+    const word   = document.getElementById("word");
+    const pivot  = document.getElementById("pivot");
+    const nGlyph = document.getElementById("nGlyph");
+    const zGlyph = document.getElementById("zGlyph");
+    const hint   = document.getElementById("hint");
 
-    let raf = null;
+    // every letter except the pivot "n"
+    const letters = [...word.querySelectorAll("span[data-l]")];
 
-    function scramble() {
-      if (reduce) { el.textContent = TARGET; el.classList.add("done"); return; }
-      if (raf) cancelAnimationFrame(raf);
-      el.classList.remove("done");
-
-      // Each character locks in after a staggered start, flipping through random
-      // glyphs while it's still "encrypted".
-      const queue = TARGET.split("").map((ch, i) => ({
-        to: ch,
-        start: i * 5 + rand(6),        // frames before it starts settling
-        end:   i * 5 + rand(6) + 22,   // frames until it locks to final char
-        cur: glyph(),
-      }));
-
-      let frame = 0;
-      const tick = () => {
-        let done = 0;
-        let html = "";
-        for (const c of queue) {
-          if (frame >= c.end) {
-            done++;
-            html += c.to;
-          } else if (frame >= c.start) {
-            if (frame % 2 === 0) c.cur = glyph();
-            html += `<span class="scrambling">${c.cur}</span>`;
-          } else {
-            html += `<span class="scrambling">${glyph()}</span>`;
-          }
-        }
-        el.innerHTML = html;
-        frame++;
-        if (done === queue.length) {
-          el.textContent = TARGET;
-          el.classList.add("done");
-          raf = null;
-          return;
-        }
-        raf = requestAnimationFrame(tick);
-      };
-      tick();
+    // build the spreading z's on each side of the pivot
+    const PER_SIDE = 3;      // z's added to each side
+    const GAP = 0.82;        // spacing between z's, in em
+    const sides = [];
+    for (let s = -1; s <= 1; s += 2) {
+      for (let k = 1; k <= PER_SIDE; k++) {
+        const el = document.createElement("span");
+        el.className = "zside";
+        el.textContent = "z";
+        pivot.appendChild(el);
+        sides.push({ el, dir: s, k });
+      }
     }
 
-    scramble();
-    // Replay on click / tap.
-    document.body.addEventListener("click", scramble);
+    let progress = 0, ticking = false;
+
+    function computeProgress() {
+      const scrollable = scene.offsetHeight - window.innerHeight;
+      progress = scrollable > 0 ? clamp(window.scrollY / scrollable, 0, 1) : 0;
+    }
+
+    function render() {
+      const p = progress;
+
+      // hint fades out as soon as you start scrolling
+      hint.style.opacity = (0.6 * (1 - seg(p, 0.0, 0.06))).toFixed(3);
+
+      // --- Phase A: fade "injective" away, keep the n in place (0 -> 0.4) ---
+      // outer letters leave first for a gentle dissolve inward
+      const maxD = 8;
+      letters.forEach((el) => {
+        const idx = [...word.children].indexOf(el);
+        const d = Math.abs(idx - 1);                 // distance from the n (index 1)
+        const start = 0.03 + (1 - d / maxD) * 0.12;  // outer = earlier
+        const t = smooth(seg(p, start, start + 0.2));
+        el.style.opacity = (1 - t).toFixed(3);
+        el.style.transform = `translateY(${(-0.12 * t).toFixed(3)}em)`;
+        el.style.filter = t > 0 ? `blur(${(3 * t).toFixed(2)}px)` : "none";
+      });
+
+      // --- Phase B: rotate the n 90° right, morph it into an upright z (0.4 -> 0.62) ---
+      const rot = 90 * smooth(seg(p, 0.4, 0.56));
+      const nOut = smooth(seg(p, 0.5, 0.62));
+      const zIn  = smooth(seg(p, 0.5, 0.62));
+      nGlyph.style.transform = `rotate(${rot.toFixed(2)}deg)`;
+      nGlyph.style.opacity = (1 - nOut).toFixed(3);
+      zGlyph.style.opacity = zIn.toFixed(3);
+      zGlyph.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * zIn).toFixed(3)})`;
+
+      // --- Phase C: the z multiplies, spreading left and right (0.62 -> 1) ---
+      sides.forEach(({ el, dir, k }) => {
+        const start = 0.62 + (k - 1) * 0.06;         // inner z's spread first
+        const t = smooth(seg(p, start, Math.min(start + 0.26, 1)));
+        const x = dir * t * k * GAP;                 // outward offset in em
+        el.style.opacity = t.toFixed(3);
+        el.style.transform =
+          `translate(-50%, -50%) translateX(${x.toFixed(3)}em) scale(${(0.7 + 0.3 * t).toFixed(3)})`;
+      });
+
+      ticking = false;
+    }
+
+    function onScroll() {
+      computeProgress();
+      if (!ticking) { ticking = true; requestAnimationFrame(render); }
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", () => { computeProgress(); render(); });
+    computeProgress();
+    render();
   </script>
 </body>
 </html>

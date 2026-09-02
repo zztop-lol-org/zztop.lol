@@ -25,8 +25,9 @@
       overflow-x: hidden;
     }
 
-    /* tall scene gives us scroll distance; the stage is pinned in the middle */
-    .scene { height: 560vh; position: relative; }
+    /* tall scene gives us scroll distance; the stage is pinned in the middle.
+       the animation runs in the first chunk, the rest holds the finished grid */
+    .scene { height: 700vh; position: relative; }
     .stage {
       position: sticky;
       top: 0;
@@ -227,6 +228,10 @@
     const rightmostCol = Math.max(RIGHT, ...LINKS.map((L) => -LEFT + (L.text.length - 1)));
     const blockCenterCol = (-LEFT + rightmostCol) / 2;
 
+    // the whole animation plays within the first ANIM_END of the scroll; past that
+    // the finished grid just holds, centered, so a fast scroll can't skip the links
+    const ANIM_END = 0.75;
+
     let progress = 0, ticking = false, nOffset = 0;
 
     function measure() {
@@ -246,7 +251,8 @@
     }
 
     function render() {
-      const p = progress;
+      // remap real scroll into animation space; clamps to 1 during the hold tail
+      const p = Math.min(progress / ANIM_END, 1);
 
       // hint fades out as soon as you start scrolling
       hint.style.opacity = (0.6 * (1 - seg(p, 0.0, 0.06))).toFixed(3);

@@ -105,8 +105,44 @@
       50%      { transform: translate(-50%, 6px); }
     }
 
+    /* final panel: ZZTOP + fat up arrow, a back-to-top that replays the scroll */
+    .footer {
+      height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    .backtop {
+      appearance: none;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      color: var(--green);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15em;
+      font-size: clamp(1.1rem, 6.8vw, 5rem);   /* same size as the Z row */
+      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.4);
+      transition: filter 0.2s ease, transform 0.2s ease;
+    }
+    .backtop .arrow {
+      width: 0.78em;
+      height: 0.78em;
+      display: block;
+      filter: drop-shadow(0 0 0.18em rgba(124, 255, 176, 0.45));
+    }
+    .backtop .zztop {
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+    .backtop:hover { filter: brightness(1.15); transform: translateY(-4px); }
+    .backtop:active { transform: translateY(-1px); }
+
     @media (prefers-reduced-motion: reduce) {
       .hint { animation: none; }
+      .backtop { transition: none; }
     }
   </style>
 </head>
@@ -118,6 +154,18 @@
       </div>
     </div>
   </div>
+  <footer class="footer">
+    <button class="backtop" id="backtop" aria-label="Back to top">
+      <svg class="arrow" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <line x1="50" y1="90" x2="50" y2="24" stroke="currentColor" stroke-width="16"
+              stroke-linecap="round" />
+        <polyline points="16,54 50,18 84,54" stroke="currentColor" stroke-width="16"
+                  stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="zztop">ZZTOP</span>
+    </button>
+  </footer>
+
   <div class="hint" id="hint">scroll ↓</div>
 
   <script>
@@ -279,6 +327,26 @@
     } else {
       reveal();
     }
+
+    // ZZTOP: smooth-scroll back to the top so the whole animation plays in
+    // reverse — quick but visible. Fixed duration = consistent "regular speed".
+    const backtop = document.getElementById("backtop");
+    const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    let scrolling = false;
+    function scrollToTop(duration = 1500) {
+      const startY = window.scrollY;
+      if (startY <= 0 || scrolling) return;
+      scrolling = true;
+      const startT = performance.now();
+      const stepTo = (now) => {
+        const t = Math.min(1, (now - startT) / duration);
+        window.scrollTo(0, Math.round(startY * (1 - easeInOut(t))));
+        if (t < 1) requestAnimationFrame(stepTo);
+        else scrolling = false;
+      };
+      requestAnimationFrame(stepTo);
+    }
+    backtop.addEventListener("click", () => scrollToTop());
   </script>
 </body>
 </html>

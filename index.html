@@ -27,7 +27,7 @@
     }
 
     /* tall scene gives us scroll distance; the stage is pinned in the middle */
-    .scene { height: 420vh; position: relative; }
+    .scene { height: 560vh; position: relative; }
     .stage {
       position: sticky;
       top: 0;
@@ -66,6 +66,34 @@
       pointer-events: none;
     }
 
+    /* links rise up from beneath the final ZZZ row, matching its style */
+    .links {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 4.5rem);
+      transform: translateX(-50%);
+      display: flex;
+      gap: clamp(1.6rem, 6vw, 4.5rem);
+      align-items: center;
+      pointer-events: none;
+    }
+    .links a {
+      font-weight: 800;
+      font-size: clamp(1rem, 3.4vw, 2rem);
+      letter-spacing: 0.05em;
+      color: var(--green);
+      text-decoration: none;
+      white-space: nowrap;
+      text-shadow: 0 0 0.4em rgba(124, 255, 176, 0.35);
+      opacity: 0;
+      will-change: transform, opacity;
+      transition: text-shadow 0.2s ease, filter 0.2s ease;
+    }
+    .links a:hover {
+      text-shadow: 0 0 0.8em rgba(124, 255, 176, 0.85);
+      filter: brightness(1.15);
+    }
+
     .hint {
       position: fixed;
       left: 50%;
@@ -94,6 +122,10 @@
       <div class="word" id="word" aria-label="injective">
         <span data-l>I</span><span class="pivot" id="pivot"><span class="n-glyph" id="nGlyph">N</span><span class="z-glyph" id="zGlyph">Z</span></span><span data-l>J</span><span data-l>E</span><span data-l>C</span><span data-l>T</span><span data-l>I</span><span data-l>V</span><span data-l>E</span>
       </div>
+      <nav class="links" id="links" aria-label="links">
+        <a href="https://pump.trippyinj.xyz/launch/382" target="_blank" rel="noopener">ZZCHART</a>
+        <a href="https://t.me/zztop_lol" target="_blank" rel="noopener">ZZTELEGRAM</a>
+      </nav>
     </div>
   </div>
   <div class="hint" id="hint">scroll ↓</div>
@@ -110,6 +142,8 @@
     const nGlyph = document.getElementById("nGlyph");
     const zGlyph = document.getElementById("zGlyph");
     const hint   = document.getElementById("hint");
+    const links  = document.getElementById("links");
+    const linkEls = [...links.querySelectorAll("a")];
 
     // every letter except the pivot "n"
     const letters = [...word.querySelectorAll("span[data-l]")];
@@ -151,41 +185,50 @@
       // hint fades out as soon as you start scrolling
       hint.style.opacity = (0.6 * (1 - seg(p, 0.0, 0.06))).toFixed(3);
 
-      // --- Phase A: fade "injective" away, keep the n in place (0 -> 0.4) ---
+      // --- Phase A: fade "injective" away, keep the n in place (0 -> 0.28) ---
       // outer letters leave first for a gentle dissolve inward
       const maxD = 8;
       letters.forEach((el) => {
         const idx = [...word.children].indexOf(el);
         const d = Math.abs(idx - 1);                 // distance from the n (index 1)
-        const start = 0.03 + (1 - d / maxD) * 0.12;  // outer = earlier
-        const t = smooth(seg(p, start, start + 0.2));
+        const start = 0.02 + (1 - d / maxD) * 0.10;  // outer = earlier
+        const t = smooth(seg(p, start, start + 0.16));
         el.style.opacity = (1 - t).toFixed(3);
         el.style.transform = `translateY(${(-0.12 * t).toFixed(3)}em)`;
         el.style.filter = t > 0 ? `blur(${(3 * t).toFixed(2)}px)` : "none";
       });
 
-      // --- Phase B: rotate the n 90° right, morph it into an upright z (0.4 -> 0.62) ---
-      const rot = 90 * smooth(seg(p, 0.4, 0.56));
-      const nOut = smooth(seg(p, 0.5, 0.62));
-      const zIn  = smooth(seg(p, 0.5, 0.62));
+      // --- Phase B: rotate the n 90° right, morph it into an upright z (0.30 -> 0.52) ---
+      const rot = 90 * smooth(seg(p, 0.30, 0.44));
+      const nOut = smooth(seg(p, 0.40, 0.52));
+      const zIn  = smooth(seg(p, 0.40, 0.52));
       nGlyph.style.transform = `rotate(${rot.toFixed(2)}deg)`;
       nGlyph.style.opacity = (1 - nOut).toFixed(3);
       zGlyph.style.opacity = zIn.toFixed(3);
       zGlyph.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * zIn).toFixed(3)})`;
 
-      // --- Phase C: the z multiplies, spreading left and right (0.62 -> 1) ---
+      // --- Phase C: the z multiplies, spreading left and right (0.50 -> 0.72) ---
       // glide the whole cluster to screen center so the growing row stays visible
-      const recenter = smooth(seg(p, 0.62, 1));
+      const recenter = smooth(seg(p, 0.50, 0.72));
       word.style.transform = `translateX(${(nOffset * recenter).toFixed(2)}px)`;
 
       sides.forEach(({ el, dir, k }) => {
-        const start = 0.62 + (k - 1) * 0.06;         // inner z's spread first
-        const t = smooth(seg(p, start, Math.min(start + 0.26, 1)));
+        const start = 0.50 + (k - 1) * 0.05;         // inner z's spread first
+        const t = smooth(seg(p, start, Math.min(start + 0.22, 0.72)));
         const x = dir * t * k * GAP;                 // outward offset in em
         el.style.opacity = t.toFixed(3);
         el.style.transform =
           `translate(-50%, -50%) translateX(${x.toFixed(3)}em) scale(${(0.7 + 0.3 * t).toFixed(3)})`;
       });
+
+      // --- Phase D: the links rise up from beneath the ZZZ row (0.78 -> 0.95) ---
+      linkEls.forEach((el, i) => {
+        const start = 0.78 + i * 0.04;               // staggered, left one first
+        const t = smooth(seg(p, start, start + 0.15));
+        el.style.opacity = t.toFixed(3);
+        el.style.transform = `translateY(${((1 - t) * 1.4).toFixed(2)}rem)`;
+      });
+      links.style.pointerEvents = p > 0.82 ? "auto" : "none";
 
       ticking = false;
     }

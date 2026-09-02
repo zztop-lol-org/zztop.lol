@@ -114,7 +114,17 @@
       }
     }
 
-    let progress = 0, ticking = false;
+    let progress = 0, ticking = false, nOffset = 0;
+
+    function measure() {
+      // horizontal distance from the n's resting spot to screen center,
+      // used to glide the z-cluster back on-screen as it spreads
+      const prev = word.style.transform;
+      word.style.transform = "none";
+      const r = pivot.getBoundingClientRect();
+      nOffset = window.innerWidth / 2 - (r.left + r.width / 2);
+      word.style.transform = prev;
+    }
 
     function computeProgress() {
       const scrollable = scene.offsetHeight - window.innerHeight;
@@ -150,6 +160,10 @@
       zGlyph.style.transform = `translate(-50%, -50%) scale(${(0.8 + 0.2 * zIn).toFixed(3)})`;
 
       // --- Phase C: the z multiplies, spreading left and right (0.62 -> 1) ---
+      // glide the whole cluster to screen center so the growing row stays visible
+      const recenter = smooth(seg(p, 0.62, 1));
+      word.style.transform = `translateX(${(nOffset * recenter).toFixed(2)}px)`;
+
       sides.forEach(({ el, dir, k }) => {
         const start = 0.62 + (k - 1) * 0.06;         // inner z's spread first
         const t = smooth(seg(p, start, Math.min(start + 0.26, 1)));
@@ -168,7 +182,8 @@
     }
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", () => { computeProgress(); render(); });
+    window.addEventListener("resize", () => { measure(); computeProgress(); render(); });
+    measure();
     computeProgress();
     render();
   </script>

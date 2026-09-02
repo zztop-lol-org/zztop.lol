@@ -17,17 +17,26 @@
       color: #e8e8f0;
       font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       overflow: hidden;
+      cursor: pointer;
     }
     .zzz {
       font-size: clamp(3rem, 18vw, 16rem);
       font-weight: 700;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.04em;
       white-space: nowrap;
       user-select: none;
       background: linear-gradient(180deg, #ffffff 0%, #8a8ad0 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+    }
+    /* characters still scrambling get a subtle green "decrypting" tint */
+    .zzz .scrambling {
+      -webkit-text-fill-color: #7CFFB0;
+      color: #7CFFB0;
+      opacity: 0.85;
+    }
+    .zzz.done {
       animation: breathe 4s ease-in-out infinite;
     }
     @keyframes breathe {
@@ -35,11 +44,69 @@
       50%      { opacity: 1;    transform: scale(1.01); }
     }
     @media (prefers-reduced-motion: reduce) {
-      .zzz { animation: none; opacity: 1; }
+      .zzz { animation: none !important; opacity: 1; }
     }
   </style>
 </head>
 <body>
-  <main class="zzz" aria-label="ZzzzzZZzzz">ZzzzzZZzzz</main>
+  <main class="zzz" aria-label="ZzzzzZZzzz"></main>
+
+  <script>
+    const TARGET = "ZzzzzZZzzz";
+    const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!<>-_\\/[]{}=+*^?#@%&";
+    const el = document.querySelector(".zzz");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const rand = (n) => Math.floor(Math.random() * n);
+    const glyph = () => GLYPHS[rand(GLYPHS.length)];
+
+    let raf = null;
+
+    function scramble() {
+      if (reduce) { el.textContent = TARGET; el.classList.add("done"); return; }
+      if (raf) cancelAnimationFrame(raf);
+      el.classList.remove("done");
+
+      // Each character locks in after a staggered start, flipping through random
+      // glyphs while it's still "encrypted".
+      const queue = TARGET.split("").map((ch, i) => ({
+        to: ch,
+        start: i * 5 + rand(6),        // frames before it starts settling
+        end:   i * 5 + rand(6) + 22,   // frames until it locks to final char
+        cur: glyph(),
+      }));
+
+      let frame = 0;
+      const tick = () => {
+        let done = 0;
+        let html = "";
+        for (const c of queue) {
+          if (frame >= c.end) {
+            done++;
+            html += c.to;
+          } else if (frame >= c.start) {
+            if (frame % 2 === 0) c.cur = glyph();
+            html += `<span class="scrambling">${c.cur}</span>`;
+          } else {
+            html += `<span class="scrambling">${glyph()}</span>`;
+          }
+        }
+        el.innerHTML = html;
+        frame++;
+        if (done === queue.length) {
+          el.textContent = TARGET;
+          el.classList.add("done");
+          raf = null;
+          return;
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    scramble();
+    // Replay on click / tap.
+    document.body.addEventListener("click", scramble);
+  </script>
 </body>
 </html>

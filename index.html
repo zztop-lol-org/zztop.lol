@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zzz</title>
+  <meta name="description" content="ZzzzzZZzzz" />
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      background: #0a0a0f;
+      color: #e8e8f0;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow: hidden;
+    }
+    .zzz {
+      font-size: clamp(3rem, 18vw, 16rem);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      user-select: none;
+      background: linear-gradient(180deg, #ffffff 0%, #8a8ad0 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: breathe 4s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.55; transform: scale(0.99); }
+      50%      { opacity: 1;    transform: scale(1.01); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .zzz { animation: none; opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="zzz" aria-label="ZzzzzZZzzz">ZzzzzZZzzz</main>
+</body>
+</html>

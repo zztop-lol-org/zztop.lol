@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>injective</title>
   <meta name="description" content="injective" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@700&display=swap" rel="stylesheet" />
   <style>
     :root { color-scheme: dark; --green: #7CFFB0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,7 +15,7 @@
     body {
       background: #0a0a0f;
       color: var(--green);
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-family: "Chivo Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       overflow-x: hidden;
     }
 
@@ -28,7 +31,7 @@
     }
 
     .word {
-      font-size: clamp(2rem, 10vw, 9rem);
+      font-size: clamp(1.5rem, 7.6vw, 6.5rem);
       font-weight: 700;
       letter-spacing: 0.04em;
       white-space: nowrap;
@@ -78,7 +81,7 @@
   <div class="scene">
     <div class="stage">
       <div class="word" id="word" aria-label="injective">
-        <span data-l>i</span><span class="pivot" id="pivot"><span class="n-glyph" id="nGlyph">n</span><span class="z-glyph" id="zGlyph">z</span></span><span data-l>j</span><span data-l>e</span><span data-l>c</span><span data-l>t</span><span data-l>i</span><span data-l>v</span><span data-l>e</span>
+        <span data-l>I</span><span class="pivot" id="pivot"><span class="n-glyph" id="nGlyph">N</span><span class="z-glyph" id="zGlyph">Z</span></span><span data-l>J</span><span data-l>E</span><span data-l>C</span><span data-l>T</span><span data-l>I</span><span data-l>V</span><span data-l>E</span>
       </div>
     </div>
   </div>
@@ -108,7 +111,7 @@
       for (let k = 1; k <= PER_SIDE; k++) {
         const el = document.createElement("span");
         el.className = "zside";
-        el.textContent = "z";
+        el.textContent = "Z";
         pivot.appendChild(el);
         sides.push({ el, dir: s, k });
       }

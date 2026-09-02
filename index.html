@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>zzz</title>
-  <meta name="description" content="ZzzzzZZzzz" />
+  <meta name="description" content="zzzzzzzzzz" />
   <style>
     :root { color-scheme: dark; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -25,16 +25,13 @@
       letter-spacing: 0.04em;
       white-space: nowrap;
       user-select: none;
-      background: linear-gradient(180deg, #ffffff 0%, #8a8ad0 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-    /* characters still scrambling get a subtle green "decrypting" tint */
-    .zzz .scrambling {
-      -webkit-text-fill-color: #7CFFB0;
       color: #7CFFB0;
-      opacity: 0.85;
+      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.45);
+    }
+    /* characters still scrambling get a slightly dimmer green "decrypting" tint */
+    .zzz .scrambling {
+      color: #7CFFB0;
+      opacity: 0.8;
     }
     .zzz.done {
       animation: breathe 4s ease-in-out infinite;
@@ -49,10 +46,10 @@
   </style>
 </head>
 <body>
-  <main class="zzz" aria-label="ZzzzzZZzzz"></main>
+  <main class="zzz" aria-label="zzzzzzzzzz"></main>
 
   <script>
-    const TARGET = "ZzzzzZZzzz";
+    const TARGET = "zzzzzzzzzz";
     const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!<>-_\\/[]{}=+*^?#@%&";
     const el = document.querySelector(".zzz");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

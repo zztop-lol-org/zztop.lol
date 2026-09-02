@@ -204,8 +204,9 @@
     // stacked ABOVE the Z row, lexicographic top-to-bottom: ZZCHART, ZZTELEGRAM, ZZZZ...
     // ZZTELEGRAM (row -1) appears first, ZZCHART (row -2) appears above it next.
     const LINKS = [
-      { text: "ZZTELEGRAM", href: "https://t.me/zztop_lol",               row: -1, order: 0 },
-      { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -2, order: 1 },
+      { text: "ZZX",        href: "https://x.com/zztoplol",                row: -1, order: 0 },
+      { text: "ZZTELEGRAM", href: "https://t.me/zztop_lol",               row: -2, order: 1 },
+      { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -3, order: 2 },
     ];
     const linkRows = LINKS.map((L) => {
       const a = document.createElement("a");
@@ -285,7 +286,7 @@
       const recenter = smooth(seg(p, 0.50, 0.74));
       const settle = smooth(seg(p, 0.74, 0.94));   // drop the group so the rows above balance
       word.style.transform =
-        `translate(${(nOffset * recenter).toFixed(2)}px, ${(1.0 * settle).toFixed(3)}em)`;
+        `translate(${(nOffset * recenter).toFixed(2)}px, ${(1.8 * settle).toFixed(3)}em)`;
 
       sides.forEach(({ el, dir, k }) => {
         const start = 0.50 + (k - 1) * 0.03;         // inner z's spread first
@@ -298,8 +299,8 @@
 
       // --- Phase D: link rows rise into place ABOVE the Z row (0.77 -> 0.97) ---
       linkRows.forEach((L) => {
-        const start = 0.77 + L.order * 0.05;         // ZZTELEGRAM first, then ZZCHART above
-        const t = smooth(seg(p, start, start + 0.15));
+        const start = 0.74 + L.order * 0.05;         // ZZX first, then ZZTELEGRAM, then ZZCHART
+        const t = smooth(seg(p, start, start + 0.14));
         const y = L.row * ROWGAP + (1 - t) * 0.6;    // rise up into place
         L.a.style.opacity = t.toFixed(3);
         L.a.style.transform =

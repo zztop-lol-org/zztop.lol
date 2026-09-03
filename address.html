@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — zz address</title>
+  <script>
+    /* native cross-document view-transition direction (forward vs back), no libraries */
+    (function () {
+      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(t(navigation.activation.navigationType));
+      });
+    })();
+  </script>
+  <link rel="preload" href="fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face {
+      font-family: "Montserrat"; font-style: normal; font-weight: 800;
+      font-display: block; src: url("fonts/montserrat-800-latin.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Montserrat"; font-style: normal; font-weight: 300;
+      font-display: block; src: url("fonts/montserrat-300-latin.woff2") format("woff2");
+    }
+    :root { color-scheme: dark; --green: #7CFFB0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100dvh;
+      background: #0a0a0f;
+      color: var(--green);
+      font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+
+    .topbar { position: sticky; top: 0; padding: 1.4rem clamp(1rem, 4vw, 2.5rem); }
+    .zzback {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5em;
+      font-weight: 800;
+      font-size: clamp(1rem, 3.2vw, 1.6rem);
+      letter-spacing: 0.04em;
+      color: var(--green);
+      text-decoration: none;
+      text-shadow: 0 0 0.4em rgba(124, 255, 176, 0.4);
+      transition: filter 0.2s ease, gap 0.2s ease;
+    }
+    .zzback .arrow { width: 1.05em; height: 0.8em; display: block; }
+    .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
+
+    main {
+      min-height: calc(100dvh - 6rem);
+      display: grid;
+      place-items: center;
+      gap: 1.4rem;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    .title {
+      font-weight: 800;
+      font-size: clamp(2.2rem, 12vw, 8rem);
+      letter-spacing: 0.03em;
+      line-height: 1;
+      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.4);
+    }
+    .subtitle {
+      max-width: 22em;
+      font-weight: 300;
+      font-size: clamp(1.05rem, 2.6vw, 1.6rem);
+      line-height: 1.7;
+      color: var(--green);
+      text-shadow: 0 0 0.5em rgba(124, 255, 176, 0.25);
+    }
+
+    /* --- native cross-document View Transitions: directional slide, no libraries --- */
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
+    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
+    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
+    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
+    ::view-transition-old(root),
+    ::view-transition-new(root) { animation-duration: 0.42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
+    html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
+    html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
+    html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/" id="zzback">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span>ZZBACK</span>
+    </a>
+  </header>
+
+  <main>
+    <div class="title">ZZ ADDRESS</div>
+    <p class="subtitle">the z-maxxing starts here. soon™</p>
+  </main>
+
+  <script>
+    /* go BACK in history so the previous view restores at its exact scroll spot
+       (and the view transition runs as "back"). falls back to the homepage. */
+    document.getElementById("zzback").addEventListener("click", function (e) {
+      if (window.history.length > 1) { e.preventDefault(); window.history.back(); }
+    });
+  </script>
+</body>
+</html>

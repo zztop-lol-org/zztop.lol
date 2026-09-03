@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Local build/test tooling (gitignored deps). Not deployed.",
   "scripts": {
-    "test": "node test/derive.test.mjs && node test/engine.test.mjs",
+    "test": "node test/derive.test.mjs && node test/engine.test.mjs && node test/wasm.test.mjs",
+    "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"const fs=require('fs');const w=fs.readFileSync('wasm/target/wasm32-unknown-unknown/release/zzsearch.wasm');fs.writeFileSync('src/wasm-b64.js','export const WASM_B64 = \\\"'+w.toString('base64')+'\\\";\\n')\"",
     "build:worker": "esbuild src/worker.src.js --bundle --format=iife --outfile=vanity-worker.js --target=es2020 --minify"
   },
   "dependencies": {

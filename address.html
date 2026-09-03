@@ -189,7 +189,7 @@
 
     function spawn() {
       for (var i = 0; i < THREADS; i++) (function (i) {
-        var w = new Worker("/vanity-worker.js?v=2");
+        var w = new Worker("/vanity-worker.js?v=3");
         w.onmessage = function (e) {
           var m = e.data;
           if (m.type === "progress") onProgress(i, m);

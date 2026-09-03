@@ -6,93 +6,79 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#0a0a0f" />
-  <title>zztop — zz address</title>
+  <title>zztop — zzaddress</title>
   <script>
-    /* native cross-document view-transition direction (forward vs back), no libraries */
     (function () {
       var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
-      addEventListener("pageswap", function (e) {
-        if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType));
-      });
-      addEventListener("pagereveal", function (e) {
-        if (e.viewTransition && window.navigation && navigation.activation)
-          e.viewTransition.types.add(t(navigation.activation.navigationType));
-      });
+      addEventListener("pageswap", function (e) { if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType)); });
+      addEventListener("pagereveal", function (e) { if (e.viewTransition && window.navigation && navigation.activation) e.viewTransition.types.add(t(navigation.activation.navigationType)); });
     })();
   </script>
   <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
   <style>
-    @font-face {
-      font-family: "Montserrat"; font-style: normal; font-weight: 800;
-      font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2");
-    }
-    @font-face {
-      font-family: "Montserrat"; font-style: normal; font-weight: 300;
-      font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2");
-    }
-    :root { color-scheme: dark; --green: #7CFFB0; }
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      min-height: 100dvh;
-      background: #0a0a0f;
-      color: var(--green);
-      font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-      overflow-x: hidden;
-    }
+    body { min-height: 100dvh; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
 
-    .topbar { position: sticky; top: 0; padding: 1.4rem clamp(1rem, 4vw, 2.5rem); }
-    .zzback {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5em;
-      font-weight: 800;
-      font-size: clamp(1rem, 3.2vw, 1.6rem);
-      letter-spacing: 0.04em;
-      color: var(--green);
-      text-decoration: none;
-      text-shadow: 0 0 0.4em rgba(124, 255, 176, 0.4);
-      transition: filter 0.2s ease, gap 0.2s ease;
-    }
-    .zzback .arrow { width: 1.05em; height: 0.8em; display: block; }
+    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); z-index: 5; }
+    .zzback { display: inline-flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: clamp(1rem, 3.2vw, 1.5rem); letter-spacing: 0.04em; color: var(--green); text-decoration: none; text-shadow: 0 0 0.4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
     .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
 
-    main {
-      min-height: calc(100dvh - 6rem);
-      display: grid;
-      place-items: center;
-      gap: 1.4rem;
-      padding: 2rem 1.5rem;
-      text-align: center;
-    }
-    .title {
-      font-weight: 800;
-      font-size: clamp(2.2rem, 12vw, 8rem);
-      letter-spacing: 0.03em;
-      line-height: 1;
-      text-shadow: 0 0 0.35em rgba(124, 255, 176, 0.4);
-    }
-    .subtitle {
-      max-width: 22em;
-      font-weight: 300;
-      font-size: clamp(1.05rem, 2.6vw, 1.6rem);
-      line-height: 1.7;
-      color: var(--green);
-      text-shadow: 0 0 0.5em rgba(124, 255, 176, 0.25);
-    }
+    main { min-height: calc(100dvh - 5rem); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6rem; padding: 1rem 1.2rem 3rem; text-align: center; }
+    .title { font-weight: 800; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
 
-    /* --- native cross-document View Transitions: directional slide, no libraries --- */
+    .gen { width: 100%; max-width: 40rem; display: flex; flex-direction: column; align-items: center; gap: 1.4rem; }
+
+    .zrow { display: flex; align-items: center; gap: 1.2rem; }
+    .step { width: 2.6rem; height: 2.6rem; border-radius: 50%; border: 2px solid var(--green); background: transparent; color: var(--green); font-family: inherit; font-weight: 800; font-size: 1.5rem; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .15s, color .15s; }
+    .step:hover { background: var(--green); color: #0a0a0f; }
+    .step:disabled { opacity: .3; cursor: not-allowed; }
+    .zpick { min-width: 9.5rem; font-weight: 800; }
+    .zpick #zval { font-size: 2.4rem; }
+    .zpick .zlabel { display: block; font-weight: 300; font-size: .8rem; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+
+    .eta { font-weight: 300; font-size: clamp(.85rem, 2.4vw, 1.05rem); color: var(--green); min-height: 1.4em; letter-spacing: .02em; }
+    .eta b { font-weight: 800; }
+
+    .run { font-family: inherit; font-weight: 800; font-size: clamp(1.4rem, 6vw, 2.6rem); letter-spacing: .04em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .5em 1.1em; cursor: pointer; text-shadow: none; box-shadow: 0 0 1.5em rgba(124,255,176,.35); transition: transform .15s, box-shadow .2s, filter .2s; }
+    .run:hover { transform: translateY(-2px); box-shadow: 0 0 2.2em rgba(124,255,176,.55); }
+    .run.busy { background: transparent; color: var(--green); border: 2px solid var(--green); box-shadow: none; }
+
+    .stats { font-weight: 300; font-size: .95rem; color: var(--dim); display: flex; gap: 1.4rem; flex-wrap: wrap; justify-content: center; min-height: 1.2em; }
+    .stats b { color: var(--green); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    .best { width: 100%; display: flex; flex-direction: column; align-items: center; gap: .9rem; }
+    .best.empty { opacity: .35; }
+    .bestlabel { font-weight: 300; font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+    .bestaddr { font-weight: 800; font-size: clamp(.85rem, 3.3vw, 1.5rem); word-break: break-all; line-height: 1.35; text-shadow: 0 0 .4em rgba(124,255,176,.3); }
+    .bestaddr .lead { color: #b6ffd6; text-shadow: 0 0 .5em rgba(124,255,176,.7); }
+    .bestaddr .rest { color: var(--dim); }
+
+    .keyrow { display: inline-flex; align-items: center; gap: .7rem; }
+    .keylabel { font-weight: 300; font-size: .9rem; color: var(--dim); }
+    .copy { width: 2.4rem; height: 2.4rem; border-radius: .5rem; border: 2px solid var(--green); background: transparent; color: var(--green); cursor: pointer; display: grid; place-items: center; transition: background .15s, color .15s; }
+    .copy:hover:not(:disabled) { background: var(--green); color: #0a0a0f; }
+    .copy:disabled { opacity: .3; cursor: not-allowed; }
+    .copy svg { width: 1.15em; height: 1.15em; }
+    .copied { font-weight: 800; font-size: .9rem; color: var(--green); }
+
+    .disclaimer { max-width: 30rem; font-weight: 300; font-size: .8rem; line-height: 1.6; color: var(--dim); }
+
     @view-transition { navigation: auto; }
-    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
-    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
-    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
-    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
-    ::view-transition-old(root),
-    ::view-transition-new(root) { animation-duration: 0.42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    @keyframes zz-out-left { to { transform: translateX(-100%); } }
+    @keyframes zz-in-right { from { transform: translateX(100%); } }
+    @keyframes zz-out-right { to { transform: translateX(100%); } }
+    @keyframes zz-in-left { from { transform: translateX(-100%); } }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
     html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
     html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
     html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
     html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+    @media (prefers-reduced-motion: reduce) { .run, .step, .copy { transition: none; } }
   </style>
 </head>
 <body>
@@ -107,16 +93,198 @@
   </header>
 
   <main>
-    <div class="title">ZZADDRESS</div>
-    <p class="subtitle">the z-maxxing starts here. soon™</p>
+    <h1 class="title">ZZADDRESS</h1>
+    <div class="gen">
+      <div class="zrow">
+        <button class="step" id="dec" aria-label="fewer z">−</button>
+        <div class="zpick"><span id="zval">5</span><span class="zlabel">leading z</span></div>
+        <button class="step" id="inc" aria-label="more z">+</button>
+      </div>
+      <div class="eta" id="eta">calibrating your machine…</div>
+      <button class="run" id="run" disabled>ZZGENERATE</button>
+      <div class="stats" id="stats"></div>
+      <div class="best empty" id="best">
+        <div class="bestlabel">best pick</div>
+        <div class="bestaddr" id="bestaddr">inj1…</div>
+        <div class="keyrow">
+          <span class="keylabel" id="keylabel">private key hidden</span>
+          <button class="copy" id="copy" aria-label="copy private key" disabled>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <span class="copied" id="copied" hidden>copied ✓</span>
+        </div>
+      </div>
+      <p class="disclaimer">runs 100% in your browser — the private key never leaves this page and is never sent anywhere. experimental: don't guard real funds with a key from a meme generator.</p>
+    </div>
   </main>
 
   <script>
-    /* go BACK in history so the previous view restores at its exact scroll spot
-       (and the view transition runs as "back"). falls back to the homepage. */
     document.getElementById("zzback").addEventListener("click", function (e) {
       if (window.history.length > 1) { e.preventDefault(); window.history.back(); }
     });
+  </script>
+
+  <script>
+  (function () {
+    var THREADS = Math.max(1, (navigator.hardwareConcurrency || 4) - 1); // reserve a core for UI
+    var TARGET_MIN = 3, TARGET_MAX = 9;
+    var target = 5;
+    var perThreadRate = 0;          // addr/s measured on one worker (calibration)
+    var workers = [], tries = [], bestPerWorker = [];
+    var state = "idle";             // idle | running | stopped
+    var globalBest = { count: -1, inj: null, owner: -1 };
+    var cachedKey = null;           // { inj, privHex } for the current globalBest
+    var samples = [];               // rolling {t, tries} for live rate
+    var startT = 0, accumBefore = 0n;
+
+    var $ = function (id) { return document.getElementById(id); };
+    var zval = $("zval"), etaEl = $("eta"), runBtn = $("run"), statsEl = $("stats");
+    var bestBox = $("best"), bestAddr = $("bestaddr"), copyBtn = $("copy"), copied = $("copied"), keylabel = $("keylabel");
+
+    function fmtNum(n) { n = Number(n); if (n < 1e6) return n.toLocaleString(); if (n < 1e9) return (n/1e6).toFixed(2)+"M"; if (n < 1e12) return (n/1e9).toFixed(2)+"B"; return (n/1e12).toFixed(2)+"T"; }
+    function fmtTime(s) { if (!isFinite(s)) return "∞"; if (s < 1) return "<1s"; if (s < 90) return Math.round(s)+"s"; if (s < 5400) return (s/60).toFixed(1)+"m"; if (s < 129600) return (s/3600).toFixed(1)+"h"; return (s/86400).toFixed(1)+"d"; }
+    function totalTries() { var t = 0n; for (var i = 0; i < tries.length; i++) t += tries[i] || 0n; return t; }
+
+    function expectedTries(N) { return Math.pow(32, N); }
+    function updateEta() {
+      var rate = liveRate() || (perThreadRate * THREADS);
+      if (!rate) { etaEl.textContent = "calibrating your machine…"; return; }
+      var exp = expectedTries(target);
+      var median = 0.6931 * exp / rate, p90 = 2.3026 * exp / rate;
+      etaEl.innerHTML = "target <b>inj1" + "z".repeat(target) + "…</b> · 50%: <b>" + fmtTime(median) + "</b> · 90%: <b>" + fmtTime(p90) + "</b> · " + fmtNum(rate) + "/s · " + THREADS + " thread" + (THREADS>1?"s":"");
+    }
+
+    function liveRate() {
+      if (samples.length < 2) return 0;
+      var a = samples[0], b = samples[samples.length - 1];
+      var dt = (b.t - a.t) / 1000; if (dt <= 0) return 0;
+      return Number(b.tries - a.tries) / dt;
+    }
+
+    function setTarget(v) { target = Math.max(TARGET_MIN, Math.min(TARGET_MAX, v)); zval.textContent = target; $("dec").disabled = target <= TARGET_MIN; $("inc").disabled = target >= TARGET_MAX; updateEta(); }
+    $("dec").addEventListener("click", function () { setTarget(target - 1); });
+    $("inc").addEventListener("click", function () { setTarget(target + 1); });
+
+    function renderBest() {
+      if (globalBest.count < 0) return;
+      bestBox.classList.remove("empty");
+      var inj = globalBest.inj, body = inj.slice(4); // after 'inj1'
+      var lead = 0; while (body[lead] === "z") lead++;
+      bestAddr.innerHTML = '<span class="rest">inj1</span><span class="lead">' + body.slice(0, lead) + '</span><span class="">' + body.slice(lead) + '</span>';
+      keylabel.textContent = globalBest.count + " leading z · key hidden";
+      copyBtn.disabled = false;
+    }
+
+    function bodyGreater(a, b) { // compare bech32 bodies lexicographically (string ascii)
+      a = a.slice(4); b = b.slice(4); return a > b;
+    }
+
+    function onProgress(i, msg) {
+      tries[i] = msg.tries;
+      if (msg.count >= 0 && msg.inj) {
+        bestPerWorker[i] = { count: msg.count, inj: msg.inj };
+        var better = msg.count > globalBest.count || (msg.count === globalBest.count && globalBest.inj && bodyGreater(msg.inj, globalBest.inj));
+        if (better) { globalBest = { count: msg.count, inj: msg.inj, owner: i }; cachedKey = null; renderBest(); }
+      }
+    }
+
+    function spawn() {
+      for (var i = 0; i < THREADS; i++) (function (i) {
+        var w = new Worker("/vanity-worker.js");
+        w.onmessage = function (e) {
+          var m = e.data;
+          if (m.type === "progress") onProgress(i, m);
+          else if (m.type === "exported") handleExported(m.key);
+        };
+        workers[i] = w; tries[i] = 0n;
+      })(i);
+    }
+
+    var uiTimer = null;
+    function tick() {
+      var tt = totalTries();
+      samples.push({ t: performance.now(), tries: tt });
+      while (samples.length > 12) samples.shift(); // ~3s window at 250ms
+      var elapsed = (performance.now() - startT) / 1000;
+      statsEl.innerHTML = "<span>tries <b>" + fmtNum(tt) + "</b></span><span>rate <b>" + fmtNum(liveRate()) + "/s</b></span><span>elapsed <b>" + fmtTime(elapsed) + "</b></span>";
+      updateEta();
+    }
+
+    function startAll() {
+      samples = []; startT = performance.now();
+      for (var i = 0; i < workers.length; i++) workers[i].postMessage({ type: "start" });
+      state = "running"; runBtn.textContent = "ZZSTOP"; runBtn.classList.add("busy");
+      uiTimer = setInterval(tick, 250);
+    }
+    function stopAll() {
+      for (var i = 0; i < workers.length; i++) workers[i].postMessage({ type: "stop" });
+      state = "stopped"; runBtn.textContent = "ZZCONTINUE"; runBtn.classList.remove("busy");
+      clearInterval(uiTimer); uiTimer = null;
+    }
+
+    runBtn.addEventListener("click", function () {
+      if (state === "idle") { if (!workers.length) spawn(); startAll(); }
+      else if (state === "running") stopAll();
+      else if (state === "stopped") startAll();
+    });
+
+    // ---- copy: fetch key from owner worker on demand, verify, then re-seed ----
+    var pendingCopy = false;
+    function handleExported(key) {
+      pendingCopy = false;
+      if (!key || key.inj !== globalBest.inj) { flashCopied("verify failed", true); return; }
+      cachedKey = { inj: key.inj, privHex: key.privHex };
+      doClipboard(key.privHex);
+      // re-seed the other workers too (owner already re-seeded itself)
+      for (var i = 0; i < workers.length; i++) if (i !== globalBest.owner) workers[i].postMessage({ type: "reseed" });
+    }
+    function doClipboard(hex) {
+      var ok = function () { flashCopied("private key copied"); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(hex).then(ok, function(){ legacyCopy(hex); });
+      else legacyCopy(hex);
+    }
+    function legacyCopy(hex) {
+      var ta = document.createElement("textarea"); ta.value = hex; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); flashCopied("private key copied"); } catch (e) { flashCopied("copy blocked", true); }
+      document.body.removeChild(ta);
+    }
+    var copiedTimer = null;
+    function flashCopied(text, warn) { copied.textContent = text + (warn ? " ⚠" : " ✓"); copied.hidden = false; clearTimeout(copiedTimer); copiedTimer = setTimeout(function () { copied.hidden = true; }, 2500); }
+
+    copyBtn.addEventListener("click", function () {
+      if (globalBest.count < 0) return;
+      if (cachedKey && cachedKey.inj === globalBest.inj) { doClipboard(cachedKey.privHex); return; }
+      if (globalBest.owner < 0 || !workers[globalBest.owner]) { flashCopied("no owner", true); return; }
+      if (pendingCopy) return;
+      pendingCopy = true;
+      workers[globalBest.owner].postMessage({ type: "export" });
+    });
+
+    // ---- calibration: one worker, warm up then measure sustained rate ----
+    function calibrate() {
+      var cw = new Worker("/vanity-worker.js");
+      var t0 = 0, warmTries = 0n, done = false;
+      cw.onmessage = function (e) {
+        var m = e.data; if (m.type !== "progress") return;
+        if (t0 === 0) { // first progress after ~warmup; start the clock after 1s of warm
+          setTimeout(function () { t0 = performance.now(); warmTries = m.tries; }, 1000);
+        }
+        if (t0 && !done && performance.now() - t0 >= 1400) {
+          done = true;
+          var dt = (performance.now() - t0) / 1000;
+          perThreadRate = Number(m.tries - warmTries) / dt;
+          cw.postMessage({ type: "stop" }); cw.terminate();
+          runBtn.disabled = false; updateEta();
+        }
+      };
+      cw.postMessage({ type: "start" });
+    }
+
+    setTarget(5);
+    // run calibration shortly after load so it doesn't fight the entry transition
+    setTimeout(calibrate, 300);
+  })();
   </script>
 </body>
 </html>

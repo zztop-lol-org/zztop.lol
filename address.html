@@ -99,19 +99,13 @@
   <main>
     <h1 class="title">ZZADDRESS</h1>
     <div class="gen">
-      <div class="zrow">
-        <button class="step" id="dec" aria-label="fewer z">−</button>
-        <div class="zpick"><span id="zval">5</span><span class="zlabel">leading z</span></div>
-        <button class="step" id="inc" aria-label="more z">+</button>
-      </div>
-      <div class="eta" id="eta">calibrating your machine…</div>
-      <button class="run" id="run" disabled>ZZGENERATE</button>
+      <button class="run" id="run">ZZGENERATE</button>
       <div class="stats" id="stats"></div>
       <div class="best empty" id="best">
         <div class="bestlabel">best pick</div>
         <div class="bestaddr" id="bestaddr">inj1…</div>
         <div class="keyrow">
-          <span class="keylabel" id="keylabel">private key hidden</span>
+          <span class="keylabel" id="keylabel">copy private key</span>
           <button class="copy" id="copy" aria-label="copy private key" disabled>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>
@@ -131,32 +125,19 @@
   <script>
   (function () {
     var THREADS = Math.max(1, (navigator.hardwareConcurrency || 4) - 1); // reserve a core for UI
-    var TARGET_MIN = 3, TARGET_MAX = 9;
-    var target = 5;
-    var perThreadRate = 0;          // addr/s measured on one worker (calibration)
     var workers = [], tries = [], bestPerWorker = [];
     var state = "idle";             // idle | running | stopped
     var globalBest = { count: -1, inj: null, owner: -1 };
     var cachedKey = null;           // { inj, privHex } for the current globalBest
     var samples = [];               // rolling {t, tries} for live rate
-    var startT = 0, accumBefore = 0n;
+    var startT = 0;
 
     var $ = function (id) { return document.getElementById(id); };
-    var zval = $("zval"), etaEl = $("eta"), runBtn = $("run"), statsEl = $("stats");
+    var runBtn = $("run"), statsEl = $("stats");
     var bestBox = $("best"), bestAddr = $("bestaddr"), copyBtn = $("copy"), copied = $("copied"), keylabel = $("keylabel");
 
     function fmtNum(n) { n = Number(n); if (n < 1e6) return n.toLocaleString(); if (n < 1e9) return (n/1e6).toFixed(2)+"M"; if (n < 1e12) return (n/1e9).toFixed(2)+"B"; return (n/1e12).toFixed(2)+"T"; }
-    function fmtTime(s) { if (!isFinite(s)) return "∞"; if (s < 1) return "<1s"; if (s < 90) return Math.round(s)+"s"; if (s < 5400) return (s/60).toFixed(1)+"m"; if (s < 129600) return (s/3600).toFixed(1)+"h"; return (s/86400).toFixed(1)+"d"; }
     function totalTries() { var t = 0n; for (var i = 0; i < tries.length; i++) t += tries[i] || 0n; return t; }
-
-    function expectedTries(N) { return Math.pow(32, N); }
-    function updateEta() {
-      var rate = liveRate() || (perThreadRate * THREADS);
-      if (!rate) { etaEl.textContent = "calibrating your machine…"; return; }
-      var exp = expectedTries(target);
-      var median = 0.6931 * exp / rate, p90 = 2.3026 * exp / rate;
-      etaEl.innerHTML = "target <b>inj1" + "z".repeat(target) + "…</b> · 50%: <b>" + fmtTime(median) + "</b> · 90%: <b>" + fmtTime(p90) + "</b> · " + fmtNum(rate) + "/s · " + THREADS + " thread" + (THREADS>1?"s":"");
-    }
 
     function liveRate() {
       if (samples.length < 2) return 0;
@@ -165,17 +146,12 @@
       return Number(b.tries - a.tries) / dt;
     }
 
-    function setTarget(v) { target = Math.max(TARGET_MIN, Math.min(TARGET_MAX, v)); zval.textContent = target; $("dec").disabled = target <= TARGET_MIN; $("inc").disabled = target >= TARGET_MAX; updateEta(); }
-    $("dec").addEventListener("click", function () { setTarget(target - 1); });
-    $("inc").addEventListener("click", function () { setTarget(target + 1); });
-
     function renderBest() {
       if (globalBest.count < 0) return;
       bestBox.classList.remove("empty");
       var inj = globalBest.inj, body = inj.slice(4); // after 'inj1'
       var lead = 0; while (body[lead] === "z") lead++;
       bestAddr.innerHTML = '<span class="rest">inj1</span><span class="lead">' + body.slice(0, lead) + '</span><span class="">' + body.slice(lead) + '</span>';
-      keylabel.textContent = globalBest.count + " leading z · key hidden";
       copyBtn.disabled = false;
     }
 
@@ -209,9 +185,7 @@
       var tt = totalTries();
       samples.push({ t: performance.now(), tries: tt });
       while (samples.length > 12) samples.shift(); // ~3s window at 250ms
-      var elapsed = (performance.now() - startT) / 1000;
-      statsEl.innerHTML = "<span>tries <b>" + fmtNum(tt) + "</b></span><span>rate <b>" + fmtNum(liveRate()) + "/s</b></span><span>elapsed <b>" + fmtTime(elapsed) + "</b></span>";
-      updateEta();
+      statsEl.innerHTML = "<span>tries <b>" + fmtNum(tt) + "</b></span><span>rate <b>" + fmtNum(liveRate()) + "/s</b></span>";
     }
 
     function startAll() {
@@ -265,29 +239,6 @@
       workers[globalBest.owner].postMessage({ type: "export" });
     });
 
-    // ---- calibration: one worker, warm up then measure sustained rate ----
-    function calibrate() {
-      var cw = new Worker("/vanity-worker.js");
-      var t0 = 0, warmTries = 0n, done = false;
-      cw.onmessage = function (e) {
-        var m = e.data; if (m.type !== "progress") return;
-        if (t0 === 0) { // first progress after ~warmup; start the clock after 1s of warm
-          setTimeout(function () { t0 = performance.now(); warmTries = m.tries; }, 1000);
-        }
-        if (t0 && !done && performance.now() - t0 >= 1400) {
-          done = true;
-          var dt = (performance.now() - t0) / 1000;
-          perThreadRate = Number(m.tries - warmTries) / dt;
-          cw.postMessage({ type: "stop" }); cw.terminate();
-          runBtn.disabled = false; updateEta();
-        }
-      };
-      cw.postMessage({ type: "start" });
-    }
-
-    setTarget(5);
-    // run calibration shortly after load so it doesn't fight the entry transition
-    setTimeout(calibrate, 300);
   })();
   </script>
 </body>

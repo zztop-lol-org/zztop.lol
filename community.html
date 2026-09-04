@@ -38,6 +38,8 @@
     .picker button { display: flex; align-items: center; gap: .7rem; justify-content: center; font-family: inherit; font-weight: 800; font-size: 1rem; color: var(--green); background: transparent; border: 2px solid var(--green); border-radius: .5rem; padding: .6em 1em; }
     .picker button:hover { background: var(--green); color: #0a0a0f; }
     .picker img { width: 1.4em; height: 1.4em; border-radius: .3em; }
+    .disconnect { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-weight: 300; font-size: .85rem; text-decoration: underline; cursor: pointer; }
+    .disconnect:hover { color: var(--green); }
     textarea { width: 100%; min-height: 6.5rem; resize: vertical; background: #12121a; color: var(--green); border: 2px solid #223; border-radius: .6rem; padding: .8rem; font-family: inherit; font-size: 1.05rem; }
     textarea:focus { outline: none; border-color: var(--green); }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-weight: 300; font-size: .85rem; color: var(--dim); }
@@ -77,6 +79,7 @@
       <button class="connect" id="connect">CONNECT WALLET</button>
       <div class="picker hidden" id="picker"></div>
       <div class="who" id="who"></div>
+      <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
 
       <div id="composer" class="hidden">
         <textarea id="text" maxlength="280" placeholder="what's the zz vibe today?"></textarea>
@@ -99,9 +102,14 @@
   (function () {
     var MAX_MEDIA = 18 * 1024 * 1024;
     var $ = function (id) { return document.getElementById(id); };
-    var connectBtn = $("connect"), picker = $("picker"), who = $("who"), composer = $("composer"), textEl = $("text"), fileEl = $("file"),
-        countEl = $("count"), postBtn = $("post"), msg = $("msg");
-    var account = null, selectedProvider = null;
+    var connectBtn = $("connect"), picker = $("picker"), who = $("who"), disconnectBtn = $("disconnect"),
+        composer = $("composer"), textEl = $("text"), fileEl = $("file"), countEl = $("count"), postBtn = $("post"), msg = $("msg");
+    var account = null, selectedProvider = null, currentName = null;
+    var STORE = "zz_wallet";
+    function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
+    function loadWallet() { try { return localStorage.getItem(STORE); } catch (e) { return null; } }
+    function forgetWallet() { try { localStorage.removeItem(STORE); } catch (e) {} }
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
     // EIP-6963: discover every injected EVM wallet (MetaMask, Rabby, Keplr-EVM, ...)
     var discovered = {};
@@ -129,26 +137,53 @@
       countEl.classList.toggle("over", n > 280);
     });
 
-    async function connectWith(entry) {
+    function showConnected() {
+      who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
+      connectBtn.classList.add("hidden");
+      picker.classList.add("hidden");
+      disconnectBtn.classList.remove("hidden");
+      composer.classList.remove("hidden");
+      setMsg("");
+    }
+    function resetConnection() {
+      account = null; selectedProvider = null; currentName = null; forgetWallet();
+      who.textContent = "";
+      disconnectBtn.classList.add("hidden");
+      composer.classList.add("hidden");
+      picker.classList.add("hidden");
+      connectBtn.classList.remove("hidden");
+    }
+    function bindAccountEvents(prov) {
+      if (prov && prov.on && !prov.__zzBound) {
+        prov.__zzBound = true;
+        prov.on("accountsChanged", function (accts) {
+          if (!accts || !accts.length) resetConnection();      // locked / revoked
+          else { account = accts[0]; showConnected(); }         // switched account
+        });
+      }
+    }
+    async function connectWith(entry, silent) {
       try {
-        var accts = await entry.provider.request({ method: "eth_requestAccounts" });
-        account = accts[0];
-        selectedProvider = entry.provider;
-        who.textContent = "connected: " + account + "  ·  " + (entry.info.name || "wallet");
-        connectBtn.classList.add("hidden");
-        picker.classList.add("hidden");
-        composer.classList.remove("hidden");
-        setMsg("");
-      } catch (e) { setMsg("connection cancelled", "err"); }
+        if (!silent) {
+          // pop the wallet's account picker so the user can switch accounts on reconnect
+          try { await entry.provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] }); } catch (e) {}
+        }
+        var accts = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
+        if (!accts || !accts.length) { if (!silent) setMsg("no account authorized", "err"); return false; }
+        account = accts[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";
+        saveWallet(entry.info.rdns || entry.info.name || "");
+        bindAccountEvents(entry.provider);
+        showConnected();
+        return true;
+      } catch (e) { if (!silent) setMsg("connection cancelled", "err"); return false; }
     }
 
     connectBtn.addEventListener("click", async function () {
       requestProviders();
-      await new Promise(function (r) { setTimeout(r, 200); }); // let wallets announce
+      await sleep(200); // let wallets announce
       var list = providerList();
       if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
       if (list.length === 1) { connectWith(list[0]); return; }
-      // multiple wallets → show a picker
       picker.innerHTML = "";
       list.forEach(function (entry) {
         var b = document.createElement("button");
@@ -160,6 +195,18 @@
       picker.classList.remove("hidden");
       setMsg("choose a wallet");
     });
+
+    disconnectBtn.addEventListener("click", resetConnection);
+
+    // silent restore across reloads (only if the wallet still authorizes us)
+    (async function restore() {
+      var id = loadWallet(); if (!id) return;
+      requestProviders();
+      await sleep(300);
+      var list = providerList();
+      var entry = list.filter(function (e) { return (e.info.rdns || e.info.name) === id; })[0] || (list.length === 1 ? list[0] : null);
+      if (entry) await connectWith(entry, true);
+    })();
 
     function readFile(f) {
       return new Promise(function (res, rej) {

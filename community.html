@@ -42,10 +42,14 @@
     .disconnect:hover { color: var(--green); }
     textarea { width: 100%; min-height: 6.5rem; resize: vertical; background: #12121a; color: var(--green); border: 2px solid #223; border-radius: .6rem; padding: .8rem; font-family: inherit; font-size: 1.05rem; }
     textarea:focus { outline: none; border-color: var(--green); }
-    .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-weight: 300; font-size: .85rem; color: var(--dim); }
+    .row { display: flex; align-items: center; gap: .6rem; font-weight: 300; font-size: .9rem; color: var(--dim); }
+    .file { background: transparent; border: 0; padding: 0; color: var(--dim); font-family: inherit; font-weight: 300; font-size: .9rem; cursor: pointer; text-decoration: underline; }
+    .file:hover { color: var(--green); }
+    .fileclear { background: transparent; border: 0; padding: 0; color: var(--dim); font-family: inherit; cursor: pointer; font-size: .9rem; }
+    .fileclear:hover { color: #ff6b8a; }
+    /* fixed-width, right-aligned, tabular so the changing count never shifts the row */
+    .count { margin-left: auto; min-width: 4.6em; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
     .count.over { color: #ff6b8a; }
-    .file { font-weight: 300; color: var(--dim); }
-    .file input { color: var(--dim); font-family: inherit; }
     .post { font-weight: 800; font-size: 1.5rem; letter-spacing: .04em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .5em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); }
     .post:disabled { opacity: .4; cursor: not-allowed; }
     .msg { min-height: 1.4em; font-weight: 300; font-size: .95rem; }
@@ -84,8 +88,10 @@
       <div id="composer" class="hidden">
         <textarea id="text" maxlength="280" placeholder="what's the zz vibe today?"></textarea>
         <div class="row">
-          <label class="file">📎 <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" /></label>
+          <button type="button" class="file" id="fileBtn">📎 attach image / video</button>
+          <button type="button" class="fileclear hidden" id="fileClear" aria-label="remove file">✕</button>
           <span class="count" id="count">0/280</span>
+          <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" hidden />
         </div>
         <button class="post" id="post">ZZPOST</button>
       </div>
@@ -103,7 +109,16 @@
     var MAX_MEDIA = 18 * 1024 * 1024;
     var $ = function (id) { return document.getElementById(id); };
     var connectBtn = $("connect"), picker = $("picker"), who = $("who"), disconnectBtn = $("disconnect"),
-        composer = $("composer"), textEl = $("text"), fileEl = $("file"), countEl = $("count"), postBtn = $("post"), msg = $("msg");
+        composer = $("composer"), textEl = $("text"), fileEl = $("file"), fileBtn = $("fileBtn"), fileClear = $("fileClear"),
+        countEl = $("count"), postBtn = $("post"), msg = $("msg");
+    function shortName(n) { return n.length > 26 ? n.slice(0, 14) + "…" + n.slice(-8) : n; }
+    function clearFile() { fileEl.value = ""; fileBtn.textContent = "📎 attach image / video"; fileClear.classList.add("hidden"); }
+    fileBtn.addEventListener("click", function () { fileEl.click(); });
+    fileClear.addEventListener("click", clearFile);
+    fileEl.addEventListener("change", function () {
+      if (fileEl.files[0]) { fileBtn.textContent = "📎 " + shortName(fileEl.files[0].name); fileClear.classList.remove("hidden"); }
+      else clearFile();
+    });
     var account = null, selectedProvider = null, currentName = null;
     var STORE = "zz_wallet";
     function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
@@ -239,7 +254,7 @@
           body: JSON.stringify({ address: account, signature: signature, ts: ts, text: text, media: media }),
         });
         var j = await res.json().catch(function () { return {}; });
-        if (res.ok && j.ok) { setMsg("✅ submitted for review — the zztop crew will approve it", "ok"); textEl.value = ""; fileEl.value = ""; countEl.textContent = "0/280"; }
+        if (res.ok && j.ok) { setMsg("✅ submitted for review — the zztop crew will approve it", "ok"); textEl.value = ""; clearFile(); countEl.textContent = "0/280"; countEl.classList.remove("over"); }
         else setMsg("✗ " + (j.error || "submit failed"), "err");
       } catch (e) { setMsg("✗ " + (e.message || "signing cancelled"), "err"); }
       postBtn.disabled = false;

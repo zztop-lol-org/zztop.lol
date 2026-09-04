@@ -1,0 +1,31 @@
+# ZZXCOMMUNITY — Pages Functions env vars (copy to .dev.vars for local `wrangler pages dev`,
+# and set these as Secrets/Vars on the Cloudflare Pages project for prod).
+# Plus a KV namespace binding named TWEETS.
+
+# --- ZZ token gate (Injective) ---
+ZZ_LCD_URL=https://lcd.injective.network
+ZZ_DENOM=factory/inj13j2rpnlwl30c02d4pzukykwfeyyhelvry9cqte/shroom_157_99c09d972f9c1f79
+ZZ_DECIMALS=18
+ZZ_MIN_BALANCE=            # N — how many ZZ required to post (integer, e.g. 100000)
+
+# --- Telegram approval bot ---
+TELEGRAM_BOT_TOKEN=        # from BotFather
+TELEGRAM_ADMIN_CHAT_ID=    # chat the previews are sent to (your DM or a private group id)
+TELEGRAM_ADMIN_USER_IDS=   # csv of Telegram user ids allowed to tap Post/Reject
+TELEGRAM_WEBHOOK_SECRET=   # random string; also set on setWebhook secret_token
+
+# --- getxapi (posts to the zztop X account) ---
+GETXAPI_TOKEN=             # get-x-api-... (Bearer API key)
+GETXAPI_AUTH_TOKEN=        # zztop account session token (from POST /twitter/user_login)
+GETXAPI_CT0=               # from user_login (optional but faster)
+GETXAPI_TWID=              # from user_login (optional but faster)
+GETXAPI_HANDLE=zztop       # for building the tweet URL + identity pin
+GETXAPI_PROXY=             # optional residential/ISP sticky proxy http://user:pass@host:port
+GETXAPI_COMMUNITY_ID=      # optional: post into a zztop X Community
+
+# Bindings (set in Pages project, not here):
+#   KV namespace  TWEETS   -> tweet queue + rate counters
+#
+# Telegram webhook registration (once):
+#   curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+#     -d url="https://zztop.lol/api/telegram" -d secret_token="$TELEGRAM_WEBHOOK_SECRET"

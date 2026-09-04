@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- this page talks to our own /api, so connect-src 'self' (unlike /address) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — community x</title>
+  <script>
+    (function () {
+      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
+      addEventListener("pageswap", function (e) { if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType)); });
+      addEventListener("pagereveal", function (e) { if (e.viewTransition && window.navigation && navigation.activation) e.viewTransition.types.add(t(navigation.activation.navigationType)); });
+    })();
+  </script>
+  <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100dvh; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
+    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
+    .zzback { display: inline-flex; align-items: center; gap: .5em; font-weight: 800; font-size: clamp(1rem,3.2vw,1.5rem); letter-spacing: .04em; color: var(--green); text-decoration: none; text-shadow: 0 0 .4em rgba(124,255,176,.4); }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
+    main { min-height: calc(100dvh - 5rem); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4rem; padding: 1rem 1.2rem 3rem; text-align: center; }
+    .title { font-weight: 800; font-size: clamp(1.8rem,8vw,4.2rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
+    .sub { font-weight: 300; font-size: .95rem; color: var(--dim); max-width: 26em; }
+    .box { width: 100%; max-width: 34rem; display: flex; flex-direction: column; gap: 1rem; }
+    button { font-family: inherit; cursor: pointer; }
+    .connect { font-weight: 800; font-size: 1.2rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .6em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); }
+    .who { font-weight: 300; font-size: .85rem; color: var(--dim); word-break: break-all; min-height: 1.2em; }
+    textarea { width: 100%; min-height: 6.5rem; resize: vertical; background: #12121a; color: var(--green); border: 2px solid #223; border-radius: .6rem; padding: .8rem; font-family: inherit; font-size: 1.05rem; }
+    textarea:focus { outline: none; border-color: var(--green); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-weight: 300; font-size: .85rem; color: var(--dim); }
+    .count.over { color: #ff6b8a; }
+    .file { font-weight: 300; color: var(--dim); }
+    .file input { color: var(--dim); font-family: inherit; }
+    .post { font-weight: 800; font-size: 1.5rem; letter-spacing: .04em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .5em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); }
+    .post:disabled { opacity: .4; cursor: not-allowed; }
+    .msg { min-height: 1.4em; font-weight: 300; font-size: .95rem; }
+    .msg.ok { color: var(--green); } .msg.err { color: #ff6b8a; }
+    .hidden { display: none; }
+    .disclaimer { position: fixed; left: 0; right: 0; bottom: 1.1rem; margin: 0 auto; max-width: 32rem; padding: 0 1rem; font-weight: 300; font-size: .78rem; line-height: 1.6; color: var(--dim); text-align: center; }
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left { to { transform: translateX(-100%); } } @keyframes zz-in-right { from { transform: translateX(100%); } }
+    @keyframes zz-out-right { to { transform: translateX(100%); } } @keyframes zz-in-left { from { transform: translateX(-100%); } }
+    ::view-transition-old(root),::view-transition-new(root){animation-duration:.42s;animation-timing-function:cubic-bezier(.4,0,.2,1);}
+    html:active-view-transition-type(zz-forward)::view-transition-old(root){animation-name:zz-out-left;}
+    html:active-view-transition-type(zz-forward)::view-transition-new(root){animation-name:zz-in-right;}
+    html:active-view-transition-type(zz-back)::view-transition-old(root){animation-name:zz-out-right;}
+    html:active-view-transition-type(zz-back)::view-transition-new(root){animation-name:zz-in-left;}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/" id="zzback">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg><span>ZZBACK</span>
+    </a>
+  </header>
+
+  <main>
+    <h1 class="title">ZZXCOMMUNITY</h1>
+    <p class="sub">hold ZZ, connect your wallet, drop a tweet. approved by the zztop crew, posted from the zztop X.</p>
+
+    <div class="box">
+      <button class="connect" id="connect">CONNECT WALLET</button>
+      <div class="who" id="who"></div>
+
+      <div id="composer" class="hidden">
+        <textarea id="text" maxlength="280" placeholder="what's the zz vibe today?"></textarea>
+        <div class="row">
+          <label class="file">📎 <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" /></label>
+          <span class="count" id="count">0/280</span>
+        </div>
+        <button class="post" id="post">ZZPOST</button>
+      </div>
+
+      <div class="msg" id="msg"></div>
+    </div>
+    <p class="disclaimer">it runs in your browser, nothing leaves this zzpage until you sign. still experimental, though</p>
+  </main>
+
+  <script>
+    document.getElementById("zzback").addEventListener("click", function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } });
+  </script>
+  <script>
+  (function () {
+    var MAX_MEDIA = 18 * 1024 * 1024;
+    var $ = function (id) { return document.getElementById(id); };
+    var connectBtn = $("connect"), who = $("who"), composer = $("composer"), textEl = $("text"), fileEl = $("file"),
+        countEl = $("count"), postBtn = $("post"), msg = $("msg");
+    var account = null;
+
+    function provider() { return window.ethereum || (window.keplr && window.keplr.ethereum) || null; }
+    function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
+
+    textEl.addEventListener("input", function () {
+      var n = [...textEl.value].length;
+      countEl.textContent = n + "/280";
+      countEl.classList.toggle("over", n > 280);
+    });
+
+    connectBtn.addEventListener("click", async function () {
+      var p = provider();
+      if (!p) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
+      try {
+        var accts = await p.request({ method: "eth_requestAccounts" });
+        account = accts[0];
+        who.textContent = "connected: " + account;
+        connectBtn.textContent = "WALLET CONNECTED";
+        composer.classList.remove("hidden");
+        setMsg("");
+      } catch (e) { setMsg("connection cancelled", "err"); }
+    });
+
+    function readFile(f) {
+      return new Promise(function (res, rej) {
+        var r = new FileReader();
+        r.onload = function () { var m = /^data:([^;]+);base64,(.*)$/.exec(r.result); res(m ? { type: m[1], data: m[2] } : null); };
+        r.onerror = rej; r.readAsDataURL(f);
+      });
+    }
+
+    postBtn.addEventListener("click", async function () {
+      if (!account) return;
+      var text = textEl.value.trim();
+      if (!text) { setMsg("write something first", "err"); return; }
+      if ([...text].length > 280) { setMsg("too long", "err"); return; }
+      var media = null;
+      if (fileEl.files[0]) {
+        if (fileEl.files[0].size > MAX_MEDIA) { setMsg("media too large (max 18MB)", "err"); return; }
+        media = await readFile(fileEl.files[0]);
+      }
+      postBtn.disabled = true; setMsg("sign in your wallet…");
+      try {
+        var ts = Math.floor(Date.now() / 1000);
+        var message = "zzzz confirming it's you\n" + ts;
+        var p = provider();
+        var signature = await p.request({ method: "personal_sign", params: [message, account] });
+        setMsg("checking ZZ + submitting…");
+        var res = await fetch("/api/submit", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ address: account, signature: signature, ts: ts, text: text, media: media }),
+        });
+        var j = await res.json().catch(function () { return {}; });
+        if (res.ok && j.ok) { setMsg("✅ submitted for review — the zztop crew will approve it", "ok"); textEl.value = ""; fileEl.value = ""; countEl.textContent = "0/280"; }
+        else setMsg("✗ " + (j.error || "submit failed"), "err");
+      } catch (e) { setMsg("✗ " + (e.message || "signing cancelled"), "err"); }
+      postBtn.disabled = false;
+    });
+  })();
+  </script>
+</body>
+</html>

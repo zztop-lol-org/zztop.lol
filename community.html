@@ -162,6 +162,7 @@
         });
       }
     }
+    function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
     async function connectWith(entry, silent) {
       try {
         if (!silent) {
@@ -169,13 +170,13 @@
           try { await entry.provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] }); } catch (e) {}
         }
         var accts = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
-        if (!accts || !accts.length) { if (!silent) setMsg("no account authorized", "err"); return false; }
+        if (!accts || !accts.length) { if (!silent) { setMsg("no account authorized", "err"); backToConnect(); } return false; }
         account = accts[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";
         saveWallet(entry.info.rdns || entry.info.name || "");
         bindAccountEvents(entry.provider);
         showConnected();
         return true;
-      } catch (e) { if (!silent) setMsg("connection cancelled", "err"); return false; }
+      } catch (e) { if (!silent) { setMsg("connection cancelled", "err"); backToConnect(); } return false; }
     }
 
     connectBtn.addEventListener("click", async function () {
@@ -183,7 +184,7 @@
       await sleep(200); // let wallets announce
       var list = providerList();
       if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
-      if (list.length === 1) { connectWith(list[0]); return; }
+      // always show the selection so disconnect -> reconnect lets you pick wallet/account
       picker.innerHTML = "";
       list.forEach(function (entry) {
         var b = document.createElement("button");
@@ -192,6 +193,7 @@
         b.addEventListener("click", function () { connectWith(entry); });
         picker.appendChild(b);
       });
+      connectBtn.classList.add("hidden");
       picker.classList.remove("hidden");
       setMsg("choose a wallet");
     });

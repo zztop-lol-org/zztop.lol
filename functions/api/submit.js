@@ -39,7 +39,11 @@ async function tgSend(env, id, caption, bytes, type, ext) {
     const r = await fetch(`${base}/sendDocument`, { method: "POST", body: fd });
     const j = await r.json();
     if (!j.ok) throw new Error("tg sendDocument failed");
-    return j.result.document && j.result.document.file_id;
+    // Telegram returns the file under document for images but video/animation/audio
+    // for those types even when sent via sendDocument — grab whichever is present.
+    const m = j.result;
+    const media = m.document || m.video || m.animation || m.audio || (m.photo && m.photo[m.photo.length - 1]);
+    return media ? media.file_id : null;
   } else {
     const r = await fetch(`${base}/sendMessage`, {
       method: "POST",

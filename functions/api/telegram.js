@@ -33,14 +33,34 @@ function bytesToB64(bytes) {
   return btoa(s);
 }
 
-async function getxapiCreate(env, text, mediaArr) {
+// upload image/gif/video and get a media_id. Videos go through getxapi's
+// chunked INIT->APPEND->FINALIZE + processing wait server-side.
+async function getxapiUpload(env, mediaData, mediaType) {
+  const payload = { auth_token: env.GETXAPI_AUTH_TOKEN, ct0: env.GETXAPI_CT0, twid: env.GETXAPI_TWID, media_data: mediaData, media_type: mediaType };
+  if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
+  let r;
+  try {
+    r = await fetch("https://api.getxapi.com/twitter/media/upload", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.GETXAPI_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr) { const e = new Error("network error uploading media"); e.retryable = true; throw e; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(`media upload ${r.status}: ${j.error || "failed"}`); if (r.status === 401) e.authDead = true; else e.retryable = true; throw e; } // no tweet yet -> always safe to retry
+  const mid = j.media_id || (j.data && j.data.media_id);
+  if (!mid) { const e = new Error("no media_id returned"); e.retryable = true; throw e; }
+  return mid;
+}
+
+async function getxapiCreate(env, text, mediaIds) {
   const payload = {
     auth_token: env.GETXAPI_AUTH_TOKEN,
     ct0: env.GETXAPI_CT0,
     twid: env.GETXAPI_TWID,
     text,
   };
-  if (mediaArr) payload.media = mediaArr;
+  if (mediaIds && mediaIds.length) payload.media_ids = mediaIds;
   if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
   if (env.GETXAPI_COMMUNITY_ID) payload.community_id = env.GETXAPI_COMMUNITY_ID;
   let r;
@@ -99,12 +119,13 @@ export async function onRequestPost(context) {
     rec.status = "posting";
     await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec));
     try {
-      let mediaArr;
+      let mediaIds;
       if (rec.file_id) {
         const bytes = await tgDownload(env, rec.file_id);
-        mediaArr = [{ data: bytesToB64(bytes), type: rec.mediaType }];
+        const mid = await getxapiUpload(env, bytesToB64(bytes), rec.mediaType);
+        mediaIds = [mid];
       }
-      const res = await getxapiCreate(env, rec.text, mediaArr);
+      const res = await getxapiCreate(env, rec.text, mediaIds);
       rec.status = "posted"; rec.url = res.url;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: "✅ posted" + (res.url ? " " + res.url : " (no url returned)") });

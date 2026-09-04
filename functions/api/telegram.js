@@ -13,6 +13,8 @@ function tg(env, method, payload) {
   }).then((r) => r.json());
 }
 const answer = (env, cbId, text) => tg(env, "answerCallbackQuery", { callback_query_id: cbId, text });
+const actionKb = (id) => ({ inline_keyboard: [[{ text: "🔁 Retry", callback_data: "ok:" + id }, { text: "❌ Cancel", callback_data: "no:" + id }]] });
+const sendAction = (env, text, id) => tg(env, "sendMessage", { chat_id: env.TELEGRAM_ADMIN_CHAT_ID, text: text, reply_markup: actionKb(id) });
 const stripButtons = (env, chatId, msgId) => tg(env, "editMessageReplyMarkup", { chat_id: chatId, message_id: msgId, reply_markup: { inline_keyboard: [] } });
 const note = (env, text) => tg(env, "sendMessage", { chat_id: env.TELEGRAM_ADMIN_CHAT_ID, text });
 
@@ -41,14 +43,22 @@ async function getxapiCreate(env, text, mediaArr) {
   if (mediaArr) payload.media = mediaArr;
   if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
   if (env.GETXAPI_COMMUNITY_ID) payload.community_id = env.GETXAPI_COMMUNITY_ID;
-  const r = await fetch("https://api.getxapi.com/twitter/tweet/create", {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.GETXAPI_TOKEN}`, "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let r;
+  try {
+    r = await fetch("https://api.getxapi.com/twitter/tweet/create", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.GETXAPI_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr) { const e = new Error("network error reaching getxapi"); e.retryable = true; throw e; }
   const j = await r.json().catch(() => ({}));
   if (r.status === 502) { const e = new Error("getxapi 502 — outcome unconfirmed"); e.unconfirmed = true; throw e; }
-  if (!r.ok) throw new Error(`getxapi ${r.status}: ${j.error || "post failed"}`);
+  if (!r.ok) {
+    const e = new Error(`getxapi ${r.status}: ${j.error || "post failed"}`);
+    if (r.status === 401) e.authDead = true;   // token expired -> re-login needed
+    else e.retryable = true;                     // 429 / 423 / 5xx / throttle -> safe to retry
+    throw e;
+  }
   const id = j.id || j.tweet_id || (j.data && j.data.id) || null;
   const url = id && env.GETXAPI_HANDLE ? `https://x.com/${env.GETXAPI_HANDLE}/status/${id}` : null;
   return { id, url };
@@ -99,9 +109,18 @@ export async function onRequestPost(context) {
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: "✅ posted" + (res.url ? " " + res.url : " (no url returned)") });
     } catch (e) {
-      rec.status = e.unconfirmed ? "unconfirmed" : "post_failed";
-      await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 });
-      await note(env, `⚠ ${rec.status}: ${e.message}. Do NOT re-tap if unconfirmed — check X first.`);
+      if (e.unconfirmed) {
+        // 502: X may have posted — do NOT auto-offer retry
+        rec.status = "unconfirmed";
+        await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 });
+        await note(env, `⚠ unconfirmed (getxapi 502): the tweet MAY have posted. Check @${env.GETXAPI_HANDLE || "the account"} on X before retrying.`);
+      } else {
+        // retryable (429/throttle/network) or auth-dead: reset to pending, offer Retry / Cancel
+        rec.status = "pending";
+        await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 60 * 60 * 24 * 7 });
+        const extra = e.authDead ? "\n(auth token may be expired — a re-login may be needed)" : "";
+        await sendAction(env, `⚠ post failed: ${e.message}${extra}\n\nretry or cancel?`, id);
+      }
     }
   })());
 

@@ -50,9 +50,10 @@
     /* fixed-width, right-aligned, tabular so the changing count never shifts the row */
     .count { margin-left: auto; min-width: 4.6em; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
     .count.over { color: #ff6b8a; }
-    .post { font-weight: 800; font-size: 1.5rem; letter-spacing: .04em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .5em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); }
+    .post { margin-top: 1.4rem; font-weight: 800; font-size: 1.5rem; letter-spacing: .04em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .5em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); }
     .post:disabled { opacity: .4; cursor: not-allowed; }
     .msg { min-height: 1.4em; font-weight: 300; font-size: .95rem; }
+    .msg a { color: var(--green); text-decoration: underline; font-weight: 800; }
     .msg.ok { color: var(--green); } .msg.err { color: #ff6b8a; }
     .hidden { display: none; }
     .disclaimer { position: fixed; left: 0; right: 0; bottom: 1.1rem; margin: 0 auto; max-width: 32rem; padding: 0 1rem; font-weight: 300; font-size: .78rem; line-height: 1.6; color: var(--dim); text-align: center; }
@@ -145,6 +146,8 @@
       return list;
     }
     function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function setMsgHTML(html, cls) { msg.innerHTML = html; msg.className = "msg " + (cls || ""); }
 
     textEl.addEventListener("input", function () {
       var n = [...textEl.value].length;
@@ -255,7 +258,11 @@
         });
         var j = await res.json().catch(function () { return {}; });
         if (res.ok && j.ok) { setMsg("✅ submitted for review — the zztop crew will approve it", "ok"); textEl.value = ""; clearFile(); countEl.textContent = "0/280"; countEl.classList.remove("over"); }
-        else setMsg("✗ " + (j.error || "submit failed"), "err");
+        else {
+          var err = j.error || "submit failed";
+          if (res.status === 403) setMsgHTML("✗ " + esc(err) + ' — <a href="https://pump.trippyinj.xyz/launch/382" target="_blank" rel="noopener">buy ZZ here</a>', "err");
+          else setMsg("✗ " + err, "err");
+        }
       } catch (e) { setMsg("✗ " + (e.message || "signing cancelled"), "err"); }
       postBtn.disabled = false;
     });

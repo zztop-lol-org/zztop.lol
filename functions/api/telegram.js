@@ -32,6 +32,16 @@ function bytesToB64(bytes) {
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return btoa(s);
 }
+// detect the real MIME from magic bytes — Telegram converts GIFs to MP4, so the
+// stored mediaType can be wrong; X's upload rejects a mismatched type.
+function sniffMime(b) {
+  if (b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return "image/gif";        // GIF8
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";        // \x89PNG
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";                        // FFD8FF
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp"; // RIFF..WEBP
+  if (b.length >= 12 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return "video/mp4";       // ....ftyp
+  return null;
+}
 
 // upload image/gif/video and get a media_id. Videos go through getxapi's
 // chunked INIT->APPEND->FINALIZE + processing wait server-side.
@@ -122,7 +132,8 @@ export async function onRequestPost(context) {
       let mediaIds;
       if (rec.file_id) {
         const bytes = await tgDownload(env, rec.file_id);
-        const mid = await getxapiUpload(env, bytesToB64(bytes), rec.mediaType);
+        const mtype = sniffMime(bytes) || rec.mediaType; // real bytes win (Telegram may have transcoded)
+        const mid = await getxapiUpload(env, bytesToB64(bytes), mtype);
         mediaIds = [mid];
       }
       const res = await getxapiCreate(env, rec.text, mediaIds);

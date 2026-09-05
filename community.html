@@ -184,10 +184,8 @@
     function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
     async function connectWith(entry, silent) {
       try {
-        if (!silent) {
-          // pop the wallet's account picker so the user can switch accounts on reconnect
-          try { await entry.provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] }); } catch (e) {}
-        }
+        // single request per user gesture — a second provider.request here breaks
+        // mobile in-app browsers (Brave) that gate the first interaction behind a prompt
         var accts = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
         if (!accts || !accts.length) { if (!silent) { setMsg("no account authorized", "err"); backToConnect(); } return false; }
         account = accts[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";

@@ -139,7 +139,10 @@ export async function onRequestPost(context) {
       const res = await getxapiCreate(env, rec.text, mediaIds);
       rec.status = "posted"; rec.url = res.url;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
-      await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: "✅ posted" + (res.url ? " " + res.url : " (no url returned)") });
+      const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)");
+      await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
+      // also announce to the community group, if configured
+      if (env.TELEGRAM_ANNOUNCE_CHAT_ID) await tg(env, "sendMessage", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, text: okText });
     } catch (e) {
       if (e.unconfirmed) {
         // 502: X may have posted — do NOT auto-offer retry

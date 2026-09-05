@@ -141,19 +141,8 @@ export async function onRequestPost(context) {
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
       const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
-      // community group: keep ONE message showing the last confirmed post — edit it in place
-      if (env.TELEGRAM_ANNOUNCE_CHAT_ID) {
-        const prev = await env.TWEETS.get("announce:msgid");
-        let updated = false;
-        if (prev) {
-          const e = await tg(env, "editMessageText", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, message_id: Number(prev), text: okText });
-          updated = !!e.ok;
-        }
-        if (!updated) {
-          const s = await tg(env, "sendMessage", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, text: okText });
-          if (s.ok) await env.TWEETS.put("announce:msgid", String(s.result.message_id));
-        }
-      }
+      // also send the confirmation to the community group
+      if (env.TELEGRAM_ANNOUNCE_CHAT_ID) await tg(env, "sendMessage", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, text: okText });
     } catch (e) {
       if (e.unconfirmed) {
         // 502: X may have posted — do NOT auto-offer retry

@@ -97,7 +97,7 @@
       <div id="composer" class="hidden">
         <textarea id="text" maxlength="280" placeholder="what's the zz vibe today?"></textarea>
         <div class="row">
-          <button type="button" class="file" id="fileBtn">📎 attach image / video</button>
+          <button type="button" class="file" id="fileBtn">attach image / video</button>
           <button type="button" class="fileclear hidden" id="fileClear" aria-label="remove file">✕</button>
           <span class="count" id="count">0/280</span>
           <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" hidden />
@@ -126,11 +126,11 @@
         composer = $("composer"), textEl = $("text"), fileEl = $("file"), fileBtn = $("fileBtn"), fileClear = $("fileClear"),
         countEl = $("count"), postBtn = $("post"), msg = $("msg");
     function shortName(n) { return n.length > 26 ? n.slice(0, 14) + "…" + n.slice(-8) : n; }
-    function clearFile() { fileEl.value = ""; fileBtn.textContent = "📎 attach image / video"; fileClear.classList.add("hidden"); }
+    function clearFile() { fileEl.value = ""; fileBtn.textContent = "attach image / video"; fileClear.classList.add("hidden"); }
     fileBtn.addEventListener("click", function () { fileEl.click(); });
     fileClear.addEventListener("click", clearFile);
     fileEl.addEventListener("change", function () {
-      if (fileEl.files[0]) { fileBtn.textContent = "📎 " + shortName(fileEl.files[0].name); fileClear.classList.remove("hidden"); }
+      if (fileEl.files[0]) { fileBtn.textContent = shortName(fileEl.files[0].name); fileClear.classList.remove("hidden"); }
       else clearFile();
     });
     var account = null, selectedProvider = null, currentName = null;

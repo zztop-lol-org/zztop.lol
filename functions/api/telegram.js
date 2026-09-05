@@ -141,8 +141,11 @@ export async function onRequestPost(context) {
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
       const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
-      // also send the confirmation to the community group
-      if (env.TELEGRAM_ANNOUNCE_CHAT_ID) await tg(env, "sendMessage", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, text: okText });
+      // also send the confirmation to the community group, with the submitter as an injscan link
+      if (env.TELEGRAM_ANNOUNCE_CHAT_ID) {
+        const groupText = `${okText}\nby <a href="https://injscan.com/account/${rec.inj}">${rec.inj}</a>`;
+        await tg(env, "sendMessage", { chat_id: env.TELEGRAM_ANNOUNCE_CHAT_ID, text: groupText, parse_mode: "HTML" });
+      }
     } catch (e) {
       if (e.unconfirmed) {
         // 502: X may have posted — do NOT auto-offer retry

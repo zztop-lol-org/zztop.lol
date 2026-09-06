@@ -184,8 +184,10 @@
     <div class="who" id="who"></div>
     <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
   </footer>
-  <script type="module">
-    import { getInjectiveAddress, injToWei, buildGrantMsgs, sendGrants, pickEndpoint } from "/lib/auction.js";
+  <script>
+    /* Deliberately a classic script with no top-level import: connecting a wallet
+       must keep working even if the Injective SDK bundle is slow, blocked or
+       broken. The SDK is pulled in lazily, only when you actually authorize. */
 
     /* Public on purpose: anyone can read exactly what they are authorizing. */
     var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
@@ -207,8 +209,49 @@
         details = document.getElementById("details"), rawEl = document.getElementById("raw"),
         copyBtn = document.getElementById("copy"), msg = document.getElementById("msg");
 
+    /* eth address -> inj bech32. Verified to match the SDK's getInjectiveAddress
+       across edge cases; inlined so /auction has no hard dependency to connect. */
+    var B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    function bechPolymod(v) {
+      var G = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3], c = 1;
+      for (var p = 0; p < v.length; ++p) {
+        var t = c >> 25; c = ((c & 0x1ffffff) << 5) ^ v[p];
+        for (var i = 0; i < 5; ++i) if ((t >> i) & 1) c ^= G[i];
+      }
+      return c;
+    }
+    function hrpExpand(h) {
+      var r = [], i;
+      for (i = 0; i < h.length; ++i) r.push(h.charCodeAt(i) >> 5);
+      r.push(0);
+      for (i = 0; i < h.length; ++i) r.push(h.charCodeAt(i) & 31);
+      return r;
+    }
+    function convertBits(d, f, t, pad) {
+      var acc = 0, bits = 0, r = [], maxv = (1 << t) - 1;
+      for (var p = 0; p < d.length; ++p) {
+        acc = (acc << f) | d[p]; bits += f;
+        while (bits >= t) { bits -= t; r.push((acc >> bits) & maxv); }
+      }
+      if (pad && bits > 0) r.push((acc << (t - bits)) & maxv);
+      return r;
+    }
+    function getInjectiveAddress(hex) {
+      hex = String(hex).replace(/^0x/, "");
+      var b = [];
+      for (var i = 0; i < hex.length; i += 2) b.push(parseInt(hex.substr(i, 2), 16));
+      var data = convertBits(b, 8, 5, true);
+      var v = hrpExpand("inj").concat(data);
+      var pm = bechPolymod(v.concat([0, 0, 0, 0, 0, 0])) ^ 1, cs = [];
+      for (var i = 0; i < 6; ++i) cs.push((pm >> 5 * (5 - i)) & 31);
+      var out = "inj1";
+      data.concat(cs).forEach(function (d) { out += B32.charAt(d); });
+      return out;
+    }
+
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
     var pendingMsgs = null;   // built on the first click, signed on the second
+    var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
     function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
@@ -341,13 +384,16 @@
       if (!account || !injAddress || !GRANTEE) return;
 
       if (!pendingMsgs) {                       // step 1: reveal, sign nothing
-        pendingMsgs = buildGrantMsgs({
+        setMsg("loading…");
+        try { sdk = sdk || await import("/lib/auction.js"); }
+        catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
+        pendingMsgs = sdk.buildGrantMsgs({
           granter: injAddress,
           grantee: GRANTEE,
           contract: CONTRACT,
           messageKey: MSG_KEY,
-          maxFundsWei: injToWei(MAX_DEPOSIT_INJ),
-          feeWei: injToWei(FEE_INJ),
+          maxFundsWei: sdk.injToWei(MAX_DEPOSIT_INJ),
+          feeWei: sdk.injToWei(FEE_INJ),
           expirationUnix: expiryUnix(),
         });
         rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
@@ -360,9 +406,9 @@
       authorizeBtn.disabled = true;             // step 2: sign + broadcast
       try {
         setMsg("finding a healthy endpoint…");
-        var picked = await pickEndpoint(LCDS);
+        var picked = await sdk.pickEndpoint(LCDS);
         setMsg("sign in your wallet — one signature covers both grants…");
-        var res = await sendGrants({
+        var res = await sdk.sendGrants({
           ethereumAddress: account,
           injectiveAddress: injAddress,
           msgs: pendingMsgs,

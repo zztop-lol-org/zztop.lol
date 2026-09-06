@@ -67,6 +67,27 @@ export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFund
 }
 
 /**
+ * Return the first endpoint that answers a cheap query, so one provider going
+ * down doesn't take the page with it. Probed sequentially: the primary is
+ * Injective's own sentry, the rest are community mirrors.
+ */
+export async function pickEndpoint(endpoints, timeoutMs = 4000) {
+  let lastErr;
+  for (const ep of endpoints) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const r = await fetch(`${ep}/cosmos/base/tendermint/v1beta1/blocks/latest`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (j?.block?.header?.chain_id) return { endpoint: ep, height: j.block.header.height };
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error("no Injective endpoint reachable" + (lastErr ? `: ${lastErr.message}` : ""));
+}
+
+/**
  * Prepare -> sign -> broadcast. `signTypedData(addressHex, jsonString)` is
  * supplied by the page so wallet plumbing stays where the rest of it lives.
  */

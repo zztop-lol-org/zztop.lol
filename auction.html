@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- talks to our own origin plus Injective's public mainnet LCD (grant broadcast) -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.lcd.injective.network; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <!-- our own origin plus Injective mainnet LCDs: sentry first, community mirrors as failover -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.lcd.injective.network https://injective-rest.publicnode.com https://injective-api.polkachu.com; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
@@ -101,6 +101,13 @@
     .term span:last-child { text-align: right; overflow-wrap: anywhere; }
     .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
     .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+    .lede p { margin-bottom: .7rem; }
+    .lede .lede-dim { color: var(--dim); }
+    .details { display: flex; flex-direction: column; gap: .9rem; }
+    .rawhead { display: flex; justify-content: space-between; align-items: baseline; font-weight: 300; font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+    .copy { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; text-decoration: underline; cursor: pointer; }
+    .copy:hover { color: var(--green); }
+    .raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; line-height: 1.5; color: var(--green); background: rgba(0,0,0,.35); border: 1px solid rgba(124,255,176,.12); border-radius: .4rem; padding: .7rem; max-height: 16rem; overflow: auto; white-space: pre; }
     .msg { font-weight: 300; font-size: .9rem; min-height: 1.4em; color: var(--dim); overflow-wrap: anywhere; }
     .msg.err { color: #ff8f8f; }
     .msg.ok { color: var(--green); }
@@ -144,19 +151,28 @@
 
   <main>
     <h1 class="title">ZZAUCTION</h1>
-    <p class="lede">The Injective buyback round fills in seconds. Authorize the zztop bot to place your deposit the moment it opens — scoped to one contract, one message, one capped amount. Your INJ never leaves your wallet until the bot deposits it, and you can revoke any time.</p>
+    <div class="lede">
+      <p>Injective runs a monthly auction buyback.</p>
+      <p>People can't get in in time. Every slot is full within minutes.</p>
+      <p>That's why the zzauction bot exists — authorize us to join for you.</p>
+      <p class="lede-dim">Is it safe? Dunno. Copy-paste the tx message into your agent and ask it yourself. I'm too tired to explain it to everyone, and I don't care about your 13 INJ.</p>
+    </div>
 
     <section class="panel hidden" id="panel">
-      <h2>what you are signing</h2>
-      <div class="terms">
+      <button class="authorize" id="authorize">AUTHORIZE ZZBOT</button>
+      <div class="details hidden" id="details">
+        <h2>what you are signing</h2>
+        <div class="terms">
         <div class="term"><span>your address</span><span id="tInj">—</span></div>
         <div class="term"><span>contract</span><span id="tContract">—</span></div>
         <div class="term"><span>allowed message</span><span id="tMsg">join_pool only</span></div>
         <div class="term"><span>max deposit</span><span id="tCap">—</span></div>
         <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
-        <div class="term"><span>both expire</span><span id="tExp">—</span></div>
+          <div class="term"><span>both expire</span><span id="tExp">—</span></div>
+        </div>
+        <div class="rawhead"><span>the tx message</span><button class="copy" id="copy">copy</button></div>
+        <pre class="raw" id="raw"></pre>
       </div>
-      <button class="authorize" id="authorize">AUTHORIZE</button>
       <p class="msg" id="msg"></p>
     </section>
   </main>
@@ -168,7 +184,7 @@
     <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
   </footer>
   <script type="module">
-    import { getInjectiveAddress, injToWei, buildGrantMsgs, sendGrants } from "/lib/auction.js";
+    import { getInjectiveAddress, injToWei, buildGrantMsgs, sendGrants, pickEndpoint } from "/lib/auction.js";
 
     /* Public on purpose: anyone can read exactly what they are authorizing. */
     var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
@@ -177,16 +193,21 @@
     var MAX_DEPOSIT_INJ = "100";         // MaxFundsLimit, matches the per-wallet round cap
     var FEE_INJ         = "0.1";         // BasicAllowance, so gas never comes out of your own INJ
     var GRANT_DAYS      = 35;            // one 28-day auction cycle plus slack
-    var LCD             = "https://sentry.lcd.injective.network"; // official mainnet LCD
+    // mainnet LCDs, tried in order: Injective's own sentry, then community mirrors
+    var LCDS            = ["https://sentry.lcd.injective.network",
+                           "https://injective-rest.publicnode.com",
+                           "https://injective-api.polkachu.com"];
     var CHAIN_ID        = "injective-1";
     var EVM_CHAIN_ID    = 1776;
 
     var connectBtn = document.getElementById("connect"), picker = document.getElementById("picker"),
         who = document.getElementById("who"), disconnectBtn = document.getElementById("disconnect"),
         panel = document.getElementById("panel"), authorizeBtn = document.getElementById("authorize"),
-        msg = document.getElementById("msg");
+        details = document.getElementById("details"), rawEl = document.getElementById("raw"),
+        copyBtn = document.getElementById("copy"), msg = document.getElementById("msg");
 
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
+    var pendingMsgs = null;   // built on the first click, signed on the second
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
     function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
@@ -233,10 +254,17 @@
       picker.classList.add("hidden");
       disconnectBtn.classList.remove("hidden");
       panel.classList.remove("hidden");
+      collapseDetails();
       renderTerms();
+    }
+    function collapseDetails() {
+      pendingMsgs = null;
+      details.classList.add("hidden");
+      authorizeBtn.textContent = "AUTHORIZE ZZBOT";
     }
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
+      collapseDetails();
       who.textContent = "";
       disconnectBtn.classList.add("hidden");
       panel.classList.add("hidden");
@@ -298,14 +326,21 @@
       if (entry) await connectWith(entry, true);
     })();
 
-    // One signature, two grants: the ContractExecutionAuthorization that lets the bot
-    // call join_pool, and the fee allowance that pays its gas. Same expiry on both.
+    // Two steps on purpose: the first click only builds and shows the grant, so
+    // nobody signs something they haven't been able to read (or paste into
+    // whatever they trust). The second click is the one that hits the wallet.
+    copyBtn.addEventListener("click", function () {
+      navigator.clipboard.writeText(rawEl.textContent).then(function () {
+        copyBtn.textContent = "copied";
+        setTimeout(function () { copyBtn.textContent = "copy"; }, 1500);
+      }, function () {});
+    });
+
     authorizeBtn.addEventListener("click", async function () {
       if (!account || !injAddress || !GRANTEE) return;
-      authorizeBtn.disabled = true;
-      setMsg("building the grant…");
-      try {
-        var msgs = buildGrantMsgs({
+
+      if (!pendingMsgs) {                       // step 1: reveal, sign nothing
+        pendingMsgs = buildGrantMsgs({
           granter: injAddress,
           grantee: GRANTEE,
           contract: CONTRACT,
@@ -314,12 +349,23 @@
           feeWei: injToWei(FEE_INJ),
           expirationUnix: expiryUnix(),
         });
+        rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
+        details.classList.remove("hidden");
+        authorizeBtn.textContent = "SIGN IN WALLET";
+        setMsg("read it, or paste it somewhere that will. nothing is signed yet.");
+        return;
+      }
+
+      authorizeBtn.disabled = true;             // step 2: sign + broadcast
+      try {
+        setMsg("finding a healthy endpoint…");
+        var picked = await pickEndpoint(LCDS);
         setMsg("sign in your wallet — one signature covers both grants…");
         var res = await sendGrants({
           ethereumAddress: account,
           injectiveAddress: injAddress,
-          msgs: msgs,
-          restEndpoint: LCD,
+          msgs: pendingMsgs,
+          restEndpoint: picked.endpoint,
           chainId: CHAIN_ID,
           evmChainId: EVM_CHAIN_ID,
           signTypedData: function (addr, json) {

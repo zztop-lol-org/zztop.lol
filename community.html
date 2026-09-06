@@ -22,10 +22,37 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
   <script>
+    /* Cross-document view-transition direction. The direction comes from the link
+       that was clicked (data-dir), never from history: a cold-loaded page has no
+       entry to go back to, and history.back() can land on an unrelated page.
+       Real browser back/forward still falls through to navigationType. */
     (function () {
-      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
-      addEventListener("pageswap", function (e) { if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType)); });
-      addEventListener("pagereveal", function (e) { if (e.viewTransition && window.navigation && navigation.activation) e.viewTransition.types.add(t(navigation.activation.navigationType)); });
+      var KEY = "zz_dir", TTL = 10000;
+      var read = function (clear) {
+        try {
+          var v = sessionStorage.getItem(KEY);
+          if (!v) return null;
+          if (clear) sessionStorage.removeItem(KEY);
+          var p = v.split("|");
+          return (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+        } catch (e) { return null; }
+      };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (a) { try { sessionStorage.setItem(KEY, a.getAttribute("data-dir") + "|" + Date.now()); } catch (x) {} }
+      }, true);
+      var type = function (nav, clear) {
+        var d = read(clear);
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
+      });
     })();
   </script>
   <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -83,13 +110,13 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="zzback" href="/" id="zzback">
+    <a class="zzback" href="/" id="zzback" data-dir="back">
       <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
         <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
         <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
       </svg><span>ZZBACK</span>
     </a>
-    <a class="zzback zzfwd" href="/community/latest"><span>ZZLATEST</span>
+    <a class="zzback zzfwd" href="/community/latest" data-dir="forward"><span>ZZLATEST</span>
       <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
         <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
         <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
@@ -122,9 +149,6 @@
     </footer>
   </main>
 
-  <script>
-    document.getElementById("zzback").addEventListener("click", function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } });
-  </script>
   <script>
   (function () {
     var MAX_MEDIA = 18 * 1024 * 1024;

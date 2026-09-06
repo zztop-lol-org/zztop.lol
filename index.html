@@ -20,15 +20,36 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
   <script>
-    /* native cross-document view-transition direction (forward vs back), no libraries */
+    /* Cross-document view-transition direction. The direction comes from the link
+       that was clicked (data-dir), never from history: a cold-loaded page has no
+       entry to go back to, and history.back() can land on an unrelated page.
+       Real browser back/forward still falls through to navigationType. */
     (function () {
-      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
+      var KEY = "zz_dir", TTL = 10000;
+      var read = function (clear) {
+        try {
+          var v = sessionStorage.getItem(KEY);
+          if (!v) return null;
+          if (clear) sessionStorage.removeItem(KEY);
+          var p = v.split("|");
+          return (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+        } catch (e) { return null; }
+      };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (a) { try { sessionStorage.setItem(KEY, a.getAttribute("data-dir") + "|" + Date.now()); } catch (x) {} }
+      }, true);
+      var type = function (nav, clear) {
+        var d = read(clear);
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
       addEventListener("pageswap", function (e) {
-        if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType));
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
       });
       addEventListener("pagereveal", function (e) {
         if (e.viewTransition && window.navigation && navigation.activation)
-          e.viewTransition.types.add(t(navigation.activation.navigationType));
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
       });
     })();
   </script>

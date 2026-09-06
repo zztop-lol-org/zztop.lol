@@ -22,10 +22,37 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
   <script>
+    /* Cross-document view-transition direction. The direction comes from the link
+       that was clicked (data-dir), never from history: a cold-loaded page has no
+       entry to go back to, and history.back() can land on an unrelated page.
+       Real browser back/forward still falls through to navigationType. */
     (function () {
-      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
-      addEventListener("pageswap", function (e) { if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType)); });
-      addEventListener("pagereveal", function (e) { if (e.viewTransition && window.navigation && navigation.activation) e.viewTransition.types.add(t(navigation.activation.navigationType)); });
+      var KEY = "zz_dir", TTL = 10000;
+      var read = function (clear) {
+        try {
+          var v = sessionStorage.getItem(KEY);
+          if (!v) return null;
+          if (clear) sessionStorage.removeItem(KEY);
+          var p = v.split("|");
+          return (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+        } catch (e) { return null; }
+      };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (a) { try { sessionStorage.setItem(KEY, a.getAttribute("data-dir") + "|" + Date.now()); } catch (x) {} }
+      }, true);
+      var type = function (nav, clear) {
+        var d = read(clear);
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
+      });
     })();
   </script>
   <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -49,14 +76,13 @@
     .shead { display: flex; align-items: baseline; gap: .7em; font-weight: 300; font-size: .8rem; letter-spacing: .25em; text-transform: uppercase; color: var(--dim); margin-bottom: 1rem; }
     .shead .n { font-weight: 800; letter-spacing: .04em; color: var(--green); }
 
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr)); }
     .card { border: 1px solid rgba(124,255,176,.18); border-radius: .5rem; padding: .9rem; display: flex; flex-direction: column; gap: .7rem; background: rgba(124,255,176,.02); }
     .card .body { font-weight: 300; font-size: .95rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
     .card img, .card video { width: 100%; border-radius: .35rem; display: block; background: #000; }
     .meta { margin-top: auto; font-weight: 300; font-size: .72rem; letter-spacing: .04em; color: var(--dim); display: flex; flex-wrap: wrap; gap: .2rem .6rem; align-items: baseline; }
     .meta a { color: var(--dim); text-decoration: underline; text-underline-offset: .2em; overflow-wrap: anywhere; }
     .meta a:hover { color: var(--green); }
-    .badge { font-size: .62rem; letter-spacing: .18em; text-transform: uppercase; border: 1px solid currentColor; border-radius: 1em; padding: .1em .6em; }
     .empty { font-weight: 300; font-size: .9rem; color: var(--dim); }
 
     @view-transition { navigation: auto; }
@@ -73,7 +99,7 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="zzback" href="/community" id="zzback">
+    <a class="zzback" href="/community" id="zzback" data-dir="back">
       <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
         <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
         <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
@@ -96,12 +122,6 @@
   </main>
 
   <script>
-    // same trick as /community: a real history traversal so the view transition
-    // resolves to zz-back and the page slides back the way it came
-    document.getElementById("zzback").addEventListener("click", function (e) {
-      if (history.length > 1) { e.preventDefault(); history.back(); }
-    });
-
     var ago = function (ts) {
       var s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
       if (s < 60) return s + "s ago";
@@ -130,12 +150,6 @@
 
       var meta = document.createElement("div");
       meta.className = "meta";
-      if (it.state === "queued") {
-        var b = document.createElement("span");
-        b.className = "badge";
-        b.textContent = "pending review";
-        meta.appendChild(b);
-      }
       if (it.inj) {
         var by = document.createElement("span");
         by.textContent = "by ";

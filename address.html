@@ -24,27 +24,44 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
   <script>
-    /* Cross-document view-transition direction. The direction comes from the link
-       that was clicked (data-dir), never from history: a cold-loaded page has no
-       entry to go back to, and history.back() can land on an unrelated page.
-       Real browser back/forward still falls through to navigationType. */
+    /* Cross-document view transitions: slide direction + a back that restores scroll.
+       We keep a small stack of the pages we walked forward through. If ZZBACK points
+       at the page on top of that stack we use history.back(), because a real history
+       traversal is what restores the scroll position you left behind. Otherwise (cold
+       load, or you arrived some other way) the link just goes where it points, so it
+       can never land somewhere unrelated. Slide direction is declared by the link. */
     (function () {
-      var KEY = "zz_dir", TTL = 10000;
-      var read = function (clear) {
-        try {
-          var v = sessionStorage.getItem(KEY);
-          if (!v) return null;
-          if (clear) sessionStorage.removeItem(KEY);
-          var p = v.split("|");
-          return (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
-        } catch (e) { return null; }
+      var DIR = "zz_dir", PATH = "zz_path", TTL = 10000;
+      var norm = function (p) {
+        try { p = new URL(p, location.href).pathname; } catch (e) { return p; }
+        return p.length > 1 && p.slice(-1) === "/" ? p.slice(0, -1) : p;
       };
+      var stack = function () { try { return JSON.parse(sessionStorage.getItem(PATH) || "[]"); } catch (e) { return []; } };
+      var save = function (v) { try { sessionStorage.setItem(PATH, JSON.stringify(v.slice(-10))); } catch (e) {} };
+
       addEventListener("click", function (e) {
         var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
-        if (a) { try { sessionStorage.setItem(KEY, a.getAttribute("data-dir") + "|" + Date.now()); } catch (x) {} }
+        if (!a) return;
+        var dir = a.getAttribute("data-dir"), s = stack();
+        try { sessionStorage.setItem(DIR, dir + "|" + Date.now()); } catch (x) {}
+        if (dir === "forward") { s.push(norm(location.pathname)); save(s); return; }
+        if (s.length && s[s.length - 1] === norm(a.getAttribute("href")) && history.length > 1) {
+          s.pop(); save(s);
+          e.preventDefault();
+          history.back();
+        }
       }, true);
+
       var type = function (nav, clear) {
-        var d = read(clear);
+        var d = null;
+        try {
+          var v = sessionStorage.getItem(DIR);
+          if (v) {
+            if (clear) sessionStorage.removeItem(DIR);
+            var p = v.split("|");
+            d = (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+          }
+        } catch (e) {}
         if (d) return d === "back" ? "zz-back" : "zz-forward";
         return nav === "traverse" ? "zz-back" : "zz-forward";
       };

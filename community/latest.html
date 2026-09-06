@@ -101,8 +101,8 @@
     /* one CSS property does it: every attachment sits in a 4:3 box, cropped to fill */
     .card img, .card video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .35rem; display: block; background: #000;
       /* flatten to the page green: grayscale -> sepia gives a ~40deg hue, rotated up to
-         the ~144deg of --green. hover, or tap on touch, shows the real colours. */
-      filter: grayscale(1) sepia(1) hue-rotate(104deg) saturate(2.4) brightness(1.05);
+         the 144deg of --green (measured on the rendered page). hover, or tap on touch, shows the real colours. */
+      filter: grayscale(1) sepia(1) hue-rotate(91deg) saturate(2.4) brightness(1.05);
       transition: filter .3s ease; }
     .card:hover img, .card:hover video,
     .card.reveal img, .card.reveal video { filter: none; }

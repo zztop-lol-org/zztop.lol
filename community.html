@@ -36,9 +36,10 @@
     :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { min-height: 100dvh; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
-    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
+    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
     .zzback { display: inline-flex; align-items: center; gap: .5em; font-weight: 800; font-size: clamp(1rem,3.2vw,1.5rem); letter-spacing: .04em; color: var(--green); text-decoration: none; text-shadow: 0 0 .4em rgba(124,255,176,.4); }
     .zzback .arrow { width: 1em; height: .78em; display: block; }
+    .zzfwd .arrow { transform: scaleX(-1); }   /* same glyph, pointing the way we travel */
     main { min-height: calc(100dvh - 5rem); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4rem; padding: 1rem 1.2rem 7rem; text-align: center; }
     .title { font-weight: 800; font-size: clamp(1.8rem,8vw,4.2rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
     .sub { font-weight: 300; font-size: .95rem; color: var(--dim); max-width: 26em; }
@@ -87,6 +88,12 @@
         <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
         <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
       </svg><span>ZZBACK</span>
+    </a>
+    <a class="zzback zzfwd" href="/community/latest"><span>ZZLATEST</span>
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
     </a>
   </header>
 

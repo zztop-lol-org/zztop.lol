@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- reads /api/latest and streams media from /api/media, both same-origin -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — zzlatest</title>
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="canonical" href="https://zztop.lol/community/latest" />
+  <meta property="og:title" content="zztop — zzlatest" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zztop.lol/community/latest" />
+  <meta property="og:image" content="https://zztop.lol/icons/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
+  <script>
+    (function () {
+      var t = function (n) { return n === "traverse" ? "zz-back" : "zz-forward"; };
+      addEventListener("pageswap", function (e) { if (e.viewTransition && e.activation) e.viewTransition.types.add(t(e.activation.navigationType)); });
+      addEventListener("pagereveal", function (e) { if (e.viewTransition && window.navigation && navigation.activation) e.viewTransition.types.add(t(navigation.activation.navigationType)); });
+    })();
+  </script>
+  <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100dvh; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
+
+    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: #0a0a0f; z-index: 5; }
+    .zzback { display: inline-flex; align-items: center; gap: .5em; font-weight: 800; font-size: clamp(1rem,3.2vw,1.5rem); letter-spacing: .04em; color: var(--green); text-decoration: none; text-shadow: 0 0 .4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
+    .zzback:hover { filter: brightness(1.15); gap: .8em; }
+
+    main { padding: 0 clamp(1rem, 4vw, 2.5rem) 4rem; }
+    .title { font-weight: 800; font-size: clamp(1.8rem, 7vw, 3.4rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); text-align: center; margin-bottom: 2.2rem; }
+
+    .section { margin-bottom: 3rem; }
+    .shead { display: flex; align-items: baseline; gap: .7em; font-weight: 300; font-size: .8rem; letter-spacing: .25em; text-transform: uppercase; color: var(--dim); margin-bottom: 1rem; }
+    .shead .n { font-weight: 800; letter-spacing: .04em; color: var(--green); }
+
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+    .card { border: 1px solid rgba(124,255,176,.18); border-radius: .5rem; padding: .9rem; display: flex; flex-direction: column; gap: .7rem; background: rgba(124,255,176,.02); }
+    .card .body { font-weight: 300; font-size: .95rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .card img, .card video { width: 100%; border-radius: .35rem; display: block; background: #000; }
+    .meta { margin-top: auto; font-weight: 300; font-size: .72rem; letter-spacing: .04em; color: var(--dim); display: flex; flex-wrap: wrap; gap: .2rem .6rem; align-items: baseline; }
+    .meta a { color: var(--dim); text-decoration: underline; text-underline-offset: .2em; overflow-wrap: anywhere; }
+    .meta a:hover { color: var(--green); }
+    .badge { font-size: .62rem; letter-spacing: .18em; text-transform: uppercase; border: 1px solid currentColor; border-radius: 1em; padding: .1em .6em; }
+    .empty { font-weight: 300; font-size: .9rem; color: var(--dim); }
+
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
+    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
+    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
+    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
+    html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
+    html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
+    html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/community" id="zzback">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg><span>ZZBACK</span>
+    </a>
+  </header>
+
+  <main>
+    <h1 class="title">ZZLATEST</h1>
+
+    <section class="section">
+      <div class="shead"><span class="n" id="nQueued">—</span><span>queued, awaiting approval</span></div>
+      <div class="grid" id="queued"></div>
+    </section>
+
+    <section class="section">
+      <div class="shead"><span class="n" id="nSent">—</span><span>sent to X</span></div>
+      <div class="grid" id="sent"></div>
+    </section>
+  </main>
+
+  <script>
+    // same trick as /community: a real history traversal so the view transition
+    // resolves to zz-back and the page slides back the way it came
+    document.getElementById("zzback").addEventListener("click", function (e) {
+      if (history.length > 1) { e.preventDefault(); history.back(); }
+    });
+
+    var ago = function (ts) {
+      var s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+      if (s < 60) return s + "s ago";
+      if (s < 3600) return Math.floor(s / 60) + "m ago";
+      if (s < 86400) return Math.floor(s / 3600) + "h ago";
+      return Math.floor(s / 86400) + "d ago";
+    };
+    var short = function (a) { return a.slice(0, 11) + "…" + a.slice(-6); };
+
+    function card(it) {
+      var el = document.createElement("article");
+      el.className = "card";
+
+      if (it.media) {
+        var m = document.createElement(it.media.kind === "video" ? "video" : "img");
+        m.src = "/api/media/" + encodeURIComponent(it.id);
+        if (it.media.kind === "video") { m.controls = true; m.playsInline = true; m.preload = "metadata"; }
+        else { m.loading = "lazy"; m.alt = ""; }
+        el.appendChild(m);
+      }
+
+      var body = document.createElement("p");
+      body.className = "body";
+      body.textContent = it.text;          // never innerHTML: this is user input
+      el.appendChild(body);
+
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      if (it.state === "queued") {
+        var b = document.createElement("span");
+        b.className = "badge";
+        b.textContent = "pending review";
+        meta.appendChild(b);
+      }
+      if (it.inj) {
+        var by = document.createElement("span");
+        by.textContent = "by ";
+        var a = document.createElement("a");
+        a.href = "https://injscan.com/account/" + it.inj;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = short(it.inj);
+        by.appendChild(a);
+        meta.appendChild(by);
+      }
+      if (it.url) {
+        var x = document.createElement("a");
+        x.href = it.url; x.target = "_blank"; x.rel = "noopener noreferrer";
+        x.textContent = "view on X";
+        meta.appendChild(x);
+      }
+      if (it.ts) {
+        var t = document.createElement("span");
+        t.textContent = ago(it.ts);
+        meta.appendChild(t);
+      }
+      el.appendChild(meta);
+      return el;
+    }
+
+    function fill(node, items, emptyText) {
+      node.replaceChildren();
+      if (!items.length) {
+        var p = document.createElement("p");
+        p.className = "empty";
+        p.textContent = emptyText;
+        node.appendChild(p);
+        return;
+      }
+      items.forEach(function (it) { node.appendChild(card(it)); });
+    }
+
+    fetch("/api/latest")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        document.getElementById("nQueued").textContent = d.queued.length;
+        document.getElementById("nSent").textContent = d.sent.length;
+        fill(document.getElementById("queued"), d.queued, "nothing waiting right now");
+        fill(document.getElementById("sent"), d.sent, "nothing posted yet");
+      })
+      .catch(function () {
+        document.getElementById("nQueued").textContent = "!";
+        document.getElementById("nSent").textContent = "!";
+        fill(document.getElementById("queued"), [], "could not load the latest posts");
+        fill(document.getElementById("sent"), [], "");
+      });
+  </script>
+</body>
+</html>

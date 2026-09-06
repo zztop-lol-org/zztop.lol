@@ -21,12 +21,18 @@ const BY_EXT = {
   gif: "image/gif", mp4: "video/mp4", mov: "video/mp4",
 };
 
+// Bump when the response shape changes: the edge cache keys off this, so old
+// entries (e.g. a GIF mistyped before the sniff existed) can never be served.
+const CACHE_VERSION = "2";
+
 export async function onRequestGet({ params, env, request, waitUntil }) {
   const id = String(params.id || "");
   if (!/^[a-f0-9-]{36}$/i.test(id)) return new Response("bad id", { status: 400 });
 
+  const u = new URL(request.url);
+  const cacheKey = new Request(`${u.origin}${u.pathname}?v=${CACHE_VERSION}`, request);
   const cache = caches.default;
-  const hit = await cache.match(request);
+  const hit = await cache.match(cacheKey);
   if (hit) return hit;
 
   let rec;
@@ -56,6 +62,6 @@ export async function onRequestGet({ params, env, request, waitUntil }) {
       "x-content-type-options": "nosniff",
     },
   });
-  waitUntil(cache.put(request, res.clone()));
+  waitUntil(cache.put(cacheKey, res.clone()));
   return res;
 }

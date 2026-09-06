@@ -97,9 +97,15 @@
 
     .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
     .card { border: 1px solid rgba(124,255,176,.18); border-radius: .5rem; padding: .9rem; display: flex; flex-direction: column; gap: .7rem; background: rgba(124,255,176,.02); }
-    .card .body { font-weight: 300; font-size: .95rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .card .body { font-weight: 300; font-size: 1.15rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
     /* one CSS property does it: every attachment sits in a 4:3 box, cropped to fill */
-    .card img, .card video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .35rem; display: block; background: #000; }
+    .card img, .card video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .35rem; display: block; background: #000;
+      /* flatten to the page green: grayscale -> sepia gives a ~40deg hue, rotated up to
+         the ~144deg of --green. hover, or tap on touch, shows the real colours. */
+      filter: grayscale(1) sepia(1) hue-rotate(104deg) saturate(2.4) brightness(1.05);
+      transition: filter .3s ease; }
+    .card:hover img, .card:hover video,
+    .card.reveal img, .card.reveal video { filter: none; }
     .meta { margin-top: auto; font-weight: 300; font-size: .72rem; letter-spacing: .04em; color: var(--dim); display: flex; flex-wrap: wrap; gap: .2rem .6rem; align-items: baseline; }
     .meta a { color: var(--dim); text-decoration: underline; text-underline-offset: .2em; overflow-wrap: anywhere; }
     .meta a:hover { color: var(--green); }
@@ -201,6 +207,14 @@
         meta.appendChild(t);
       }
       el.appendChild(meta);
+
+      // touch devices never fire :hover, so a tap toggles the true colours
+      if (it.media) {
+        el.addEventListener("click", function (e) {
+          if (e.target.closest("a")) return;      // let the links do their job
+          el.classList.toggle("reveal");
+        });
+      }
       return el;
     }
 

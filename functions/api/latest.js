@@ -22,7 +22,8 @@ export async function onRequestGet({ env }) {
         inj: rec.inj || null,
         ts: rec.ts || 0,
         url: (!queued && rec.url) || null,
-        media: rec.file_id ? { kind: String(rec.mediaType || "").startsWith("video") ? "video" : "image" } : null,
+        // Telegram transcodes GIFs to MP4, so a stored image/gif plays as video
+        media: rec.file_id ? { kind: /^video\/|^image\/gif$/.test(String(rec.mediaType || "")) ? "video" : "image" } : null,
       });
     }
     done = page.list_complete;

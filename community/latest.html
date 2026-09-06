@@ -157,7 +157,15 @@
         var m = document.createElement(it.media.kind === "video" ? "video" : "img");
         m.src = "/api/media/" + encodeURIComponent(it.id);
         if (it.media.kind === "video") { m.controls = true; m.playsInline = true; m.preload = "metadata"; }
-        else { m.loading = "lazy"; m.alt = ""; }
+        else {
+          m.loading = "lazy"; m.alt = "";
+          // last-resort net: a mistyped attachment plays instead of showing a broken image
+          m.onerror = function () {
+            var v = document.createElement("video");
+            v.src = m.src; v.controls = true; v.playsInline = true; v.preload = "metadata";
+            if (m.parentNode) m.parentNode.replaceChild(v, m);
+          };
+        }
         el.appendChild(m);
       }
 

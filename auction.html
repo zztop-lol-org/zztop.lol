@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- static teaser page, no network calls of its own -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <!-- talks to our own origin plus Injective's public mainnet LCD (grant broadcast) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.lcd.injective.network; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: light)" />
@@ -90,9 +90,33 @@
     main { min-height: calc(100dvh - 5rem); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6rem; padding: 1rem 1.2rem 3rem; text-align: center; }
     .title { font-weight: 800; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
 
-    /* same breathing rhythm as the zzz on the landing page */
-    .soon { font-weight: 300; font-size: clamp(.85rem, 2.6vw, 1.1rem); letter-spacing: .3em; text-transform: uppercase; color: var(--dim); animation: breathe 3.2s ease-in-out infinite; }
-    @keyframes breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+    main { justify-content: flex-start; padding-top: 2rem; padding-bottom: 9rem; }
+    .lede { font-weight: 300; font-size: 1.05rem; line-height: 1.6; max-width: 34rem; }
+
+    .panel { width: 100%; max-width: 34rem; border: 1px solid rgba(124,255,176,.18); border-radius: .6rem; padding: 1.2rem; display: flex; flex-direction: column; gap: .9rem; text-align: left; background: rgba(124,255,176,.02); }
+    .panel h2 { font-weight: 800; font-size: .8rem; letter-spacing: .25em; text-transform: uppercase; color: var(--dim); }
+    .terms { display: flex; flex-direction: column; gap: .5rem; font-weight: 300; font-size: .92rem; }
+    .term { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+    .term span:first-child { color: var(--dim); }
+    .term span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
+    .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+    .msg { font-weight: 300; font-size: .9rem; min-height: 1.4em; color: var(--dim); overflow-wrap: anywhere; }
+    .msg.err { color: #ff8f8f; }
+    .msg.ok { color: var(--green); }
+    .msg a { color: var(--green); }
+    .hidden { display: none !important; }
+
+    .connect { font-weight: 800; font-size: 1.2rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .6em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); cursor: pointer; font-family: inherit; }
+    .who { font-weight: 300; font-size: .85rem; color: var(--dim); word-break: break-all; min-height: 1.2em; }
+    .picker { display: flex; flex-direction: column; gap: .6rem; }
+    .picker button { display: flex; align-items: center; gap: .7rem; justify-content: center; font-family: inherit; font-weight: 800; font-size: 1rem; color: var(--green); background: transparent; border: 2px solid var(--green); border-radius: .5rem; padding: .6em 1em; cursor: pointer; }
+    .picker button:hover { background: var(--green); color: #0a0a0f; }
+    .picker img { width: 1.4em; height: 1.4em; border-radius: .3em; }
+    .disconnect { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-weight: 300; font-size: .85rem; text-decoration: underline; cursor: pointer; }
+    .disconnect:hover { color: var(--green); }
+    .walletbar { position: fixed; left: 0; right: 0; bottom: 1.2rem; display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: 0 1rem; }
+    .walletbar .who { max-width: 90vw; }
 
     @view-transition { navigation: auto; }
     @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
@@ -120,7 +144,200 @@
 
   <main>
     <h1 class="title">ZZAUCTION</h1>
-    <p class="soon">coming soon</p>
+    <p class="lede">The Injective buyback round fills in seconds. Authorize the zztop bot to place your deposit the moment it opens — scoped to one contract, one message, one capped amount. Your INJ never leaves your wallet until the bot deposits it, and you can revoke any time.</p>
+
+    <section class="panel hidden" id="panel">
+      <h2>what you are signing</h2>
+      <div class="terms">
+        <div class="term"><span>your address</span><span id="tInj">—</span></div>
+        <div class="term"><span>contract</span><span id="tContract">—</span></div>
+        <div class="term"><span>allowed message</span><span id="tMsg">join_pool only</span></div>
+        <div class="term"><span>max deposit</span><span id="tCap">—</span></div>
+        <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
+        <div class="term"><span>both expire</span><span id="tExp">—</span></div>
+      </div>
+      <button class="authorize" id="authorize">AUTHORIZE</button>
+      <p class="msg" id="msg"></p>
+    </section>
   </main>
+
+  <footer class="walletbar" id="walletbar">
+    <button class="connect" id="connect">CONNECT WALLET</button>
+    <div class="picker hidden" id="picker"></div>
+    <div class="who" id="who"></div>
+    <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
+  </footer>
+  <script type="module">
+    import { getInjectiveAddress, injToWei, buildGrantMsgs, sendGrants } from "/lib/auction.js";
+
+    /* Public on purpose: anyone can read exactly what they are authorizing. */
+    var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
+    var GRANTEE         = "";            // zztop bot wallet — set once it exists
+    var MSG_KEY         = "join_pool";
+    var MAX_DEPOSIT_INJ = "100";         // MaxFundsLimit, matches the per-wallet round cap
+    var FEE_INJ         = "0.1";         // BasicAllowance, so gas never comes out of your own INJ
+    var GRANT_DAYS      = 35;            // one 28-day auction cycle plus slack
+    var LCD             = "https://sentry.lcd.injective.network"; // official mainnet LCD
+    var CHAIN_ID        = "injective-1";
+    var EVM_CHAIN_ID    = 1776;
+
+    var connectBtn = document.getElementById("connect"), picker = document.getElementById("picker"),
+        who = document.getElementById("who"), disconnectBtn = document.getElementById("disconnect"),
+        panel = document.getElementById("panel"), authorizeBtn = document.getElementById("authorize"),
+        msg = document.getElementById("msg");
+
+    var account = null, selectedProvider = null, currentName = null, injAddress = null;
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var STORE = "zz_wallet";
+    function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
+    function loadWallet() { try { return localStorage.getItem(STORE); } catch (e) { return null; } }
+    function forgetWallet() { try { localStorage.removeItem(STORE); } catch (e) {} }
+    function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
+
+    // EIP-6963: discover every injected EVM wallet (MetaMask, Rabby, Keplr-EVM, ...)
+    var discovered = {};
+    window.addEventListener("eip6963:announceProvider", function (e) {
+      var d = e.detail;
+      if (d && d.info && d.provider) discovered[d.info.rdns || d.info.uuid || d.info.name] = d;
+    });
+    function requestProviders() { window.dispatchEvent(new Event("eip6963:requestProvider")); }
+    requestProviders();
+
+    function providerList() {
+      var list = Object.keys(discovered).map(function (k) { return discovered[k]; });
+      if (!list.length && window.ethereum) {
+        var e = window.ethereum;
+        var name = e.isRabby ? "Rabby" : e.isMetaMask ? "MetaMask" : e.isKeplr ? "Keplr" : "Injected wallet";
+        list = [{ info: { name: name }, provider: e }];
+      }
+      return list;
+    }
+
+    function expiryUnix() { return Math.floor(Date.now() / 1000) + GRANT_DAYS * 86400; }
+
+    function renderTerms() {
+      document.getElementById("tInj").textContent = injAddress || "—";
+      document.getElementById("tContract").textContent = CONTRACT;
+      document.getElementById("tCap").textContent = MAX_DEPOSIT_INJ + " INJ";
+      document.getElementById("tFee").textContent = FEE_INJ + " INJ (gas only)";
+      document.getElementById("tExp").textContent =
+        new Date(expiryUnix() * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
+      authorizeBtn.disabled = !GRANTEE;
+      setMsg(GRANTEE ? "" : "the zztop bot wallet is not published yet — check back before the next round opens");
+    }
+
+    function showConnected() {
+      injAddress = getInjectiveAddress(account);
+      who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
+      connectBtn.classList.add("hidden");
+      picker.classList.add("hidden");
+      disconnectBtn.classList.remove("hidden");
+      panel.classList.remove("hidden");
+      renderTerms();
+    }
+    function resetConnection() {
+      account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
+      who.textContent = "";
+      disconnectBtn.classList.add("hidden");
+      panel.classList.add("hidden");
+      picker.classList.add("hidden");
+      connectBtn.classList.remove("hidden");
+    }
+    function bindAccountEvents(prov) {
+      if (prov && prov.on && !prov.__zzBound) {
+        prov.__zzBound = true;
+        prov.on("accountsChanged", function (accts) {
+          if (!accts || !accts.length) resetConnection();
+          else { account = accts[0]; showConnected(); }
+        });
+      }
+    }
+    function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
+
+    async function connectWith(entry, silent) {
+      try {
+        // single request per user gesture — a second provider.request here breaks
+        // mobile in-app browsers (Brave) that gate the first interaction behind a prompt
+        var accts = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
+        if (!accts || !accts.length) { if (!silent) { setMsg("no account authorized", "err"); backToConnect(); } return false; }
+        account = accts[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";
+        saveWallet(entry.info.rdns || entry.info.name || "");
+        bindAccountEvents(entry.provider);
+        showConnected();
+        return true;
+      } catch (e) { if (!silent) { setMsg("connection cancelled", "err"); backToConnect(); } return false; }
+    }
+
+    connectBtn.addEventListener("click", async function () {
+      requestProviders();
+      await sleep(200); // let wallets announce
+      var list = providerList();
+      if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
+      picker.innerHTML = "";
+      list.forEach(function (entry) {
+        var b = document.createElement("button");
+        if (entry.info.icon) { var im = document.createElement("img"); im.src = entry.info.icon; im.alt = ""; b.appendChild(im); }
+        var span = document.createElement("span"); span.textContent = entry.info.name || "wallet"; b.appendChild(span);
+        b.addEventListener("click", function () { connectWith(entry); });
+        picker.appendChild(b);
+      });
+      connectBtn.classList.add("hidden");
+      picker.classList.remove("hidden");
+      setMsg("choose a wallet");
+    });
+
+    disconnectBtn.addEventListener("click", resetConnection);
+
+    // silent restore across reloads (only if the wallet still authorizes us)
+    (async function restore() {
+      var id = loadWallet(); if (!id) return;
+      requestProviders();
+      await sleep(300);
+      var list = providerList();
+      var entry = list.filter(function (e) { return (e.info.rdns || e.info.name) === id; })[0] || (list.length === 1 ? list[0] : null);
+      if (entry) await connectWith(entry, true);
+    })();
+
+    // One signature, two grants: the ContractExecutionAuthorization that lets the bot
+    // call join_pool, and the fee allowance that pays its gas. Same expiry on both.
+    authorizeBtn.addEventListener("click", async function () {
+      if (!account || !injAddress || !GRANTEE) return;
+      authorizeBtn.disabled = true;
+      setMsg("building the grant…");
+      try {
+        var msgs = buildGrantMsgs({
+          granter: injAddress,
+          grantee: GRANTEE,
+          contract: CONTRACT,
+          messageKey: MSG_KEY,
+          maxFundsWei: injToWei(MAX_DEPOSIT_INJ),
+          feeWei: injToWei(FEE_INJ),
+          expirationUnix: expiryUnix(),
+        });
+        setMsg("sign in your wallet — one signature covers both grants…");
+        var res = await sendGrants({
+          ethereumAddress: account,
+          injectiveAddress: injAddress,
+          msgs: msgs,
+          restEndpoint: LCD,
+          chainId: CHAIN_ID,
+          evmChainId: EVM_CHAIN_ID,
+          signTypedData: function (addr, json) {
+            return selectedProvider.request({ method: "eth_signTypedData_v4", params: [addr, json] });
+          },
+        });
+        msg.className = "msg ok";
+        msg.textContent = "authorized — ";
+        var a = document.createElement("a");
+        a.href = "https://explorer.injective.network/transaction/" + res.txHash;
+        a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.textContent = String(res.txHash).slice(0, 12) + "…";
+        msg.appendChild(a);
+      } catch (e) {
+        setMsg((e && (e.message || e.originalMessage)) || "grant failed", "err");
+        authorizeBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>

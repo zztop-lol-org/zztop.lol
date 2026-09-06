@@ -18,6 +18,63 @@ const sendAction = (env, text, id) => tg(env, "sendMessage", { chat_id: env.TELE
 const stripButtons = (env, chatId, msgId) => tg(env, "editMessageReplyMarkup", { chat_id: chatId, message_id: msgId, reply_markup: { inline_keyboard: [] } });
 const note = (env, text) => tg(env, "sendMessage", { chat_id: env.TELEGRAM_ADMIN_CHAT_ID, text });
 
+const adminIds = (env) => (env.TELEGRAM_ADMIN_USER_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+// --- /tweets report -------------------------------------------------------
+// Admin-only CSV of posted tweets grouped by submitter address. Each call
+// remembers when it ran, so the next one only reports what landed since.
+const REPORT_CURSOR_KEY = "report:tweets_last_ts";
+
+const csvCell = (s) => `"${String(s).replace(/"/g, '""')}"`;
+
+async function tgSendDoc(env, chatId, filename, content, caption) {
+  const fd = new FormData();
+  fd.set("chat_id", String(chatId));
+  fd.set("caption", caption);
+  fd.set("document", new Blob([content], { type: "text/csv" }), filename);
+  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: "POST", body: fd });
+  return r.json();
+}
+
+async function sendTweetReport(env, chatId, all) {
+  const now = Math.floor(Date.now() / 1000);
+  const since = all ? 0 : parseInt((await env.TWEETS.get(REPORT_CURSOR_KEY)) || "0", 10);
+
+  const rows = [];
+  let cursor, done = false;
+  while (!done) {
+    const page = await env.TWEETS.list({ prefix: "tw:", cursor });
+    for (const k of page.keys) {
+      const rec = JSON.parse((await env.TWEETS.get(k.name)) || "null");
+      if (!rec || rec.status !== "posted" || !rec.url) continue;
+      if (rec.ts <= since) continue;
+      rows.push(rec);
+    }
+    done = page.list_complete;
+    cursor = page.cursor;
+  }
+  rows.sort((a, b) => a.ts - b.ts);
+
+  const byAddr = new Map();
+  for (const r of rows) {
+    if (!byAddr.has(r.inj)) byAddr.set(r.inj, []);
+    byAddr.get(r.inj).push(r.url);
+  }
+
+  const stamp = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  const window = all ? "all time" : since ? `since ${stamp(since)}` : "all time (first run)";
+
+  if (!rows.length) {
+    await tg(env, "sendMessage", { chat_id: chatId, text: `no new posted tweets ${window}` });
+  } else {
+    const csv = ["addr,tweets", ...[...byAddr].map(([a, urls]) => `${a},${csvCell(urls.join(" "))}`)].join("\n");
+    const name = `zztop-tweets-${new Date(now * 1000).toISOString().slice(0, 10)}.csv`;
+    await tgSendDoc(env, chatId, name, csv, `${byAddr.size} address(es), ${rows.length} tweet(s) — ${window}`);
+  }
+  // only the cursored variant advances it, so `/tweets all` stays repeatable
+  if (!all) await env.TWEETS.put(REPORT_CURSOR_KEY, String(now));
+}
+
 async function tgDownload(env, fileId) {
   const meta = await tg(env, "getFile", { file_id: fileId });
   if (!meta.ok) throw new Error("getFile failed");
@@ -101,12 +158,24 @@ export async function onRequestPost(context) {
 
   let update;
   try { update = await request.json(); } catch { return json({ ok: true }); }
+  // /tweets [all] — admin-only CSV export. Silent for everyone else so the bot
+  // gives nothing away to strangers who poke at it.
+  const msg = update.message;
+  if (msg && typeof msg.text === "string") {
+    const [cmd, ...args] = msg.text.trim().split(/\s+/);
+    if (cmd.split("@")[0] === "/tweets") {
+      if (!adminIds(env).includes(String(msg.from && msg.from.id))) return json({ ok: true });
+      waitUntil(sendTweetReport(env, msg.chat.id, args.some((a) => a.toLowerCase() === "all")));
+      return json({ ok: true });
+    }
+  }
+
   const cq = update.callback_query;
   if (!cq || !cq.data) return json({ ok: true }); // ignore anything that isn't a button tap
 
   // admin allowlist: the PERSON who tapped, not just the chat
   const fromId = String(cq.from && cq.from.id);
-  const allowed = (env.TELEGRAM_ADMIN_USER_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const allowed = adminIds(env);
   if (!allowed.includes(fromId)) { waitUntil(answer(env, cq.id, "not authorized")); return json({ ok: true }); }
 
   const [action, id] = cq.data.split(":");

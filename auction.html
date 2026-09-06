@@ -173,8 +173,9 @@
         <div class="rawhead"><span>the tx message</span><button class="copy" id="copy">copy</button></div>
         <pre class="raw" id="raw"></pre>
       </div>
-      <p class="msg" id="msg"></p>
     </section>
+
+    <p class="msg" id="msg"></p>
   </main>
 
   <footer class="walletbar" id="walletbar">
@@ -298,7 +299,7 @@
 
     connectBtn.addEventListener("click", async function () {
       requestProviders();
-      await sleep(200); // let wallets announce
+      await sleep(400); // let wallets announce (some inject late)
       var list = providerList();
       if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
       picker.innerHTML = "";

@@ -399,7 +399,7 @@
         rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
         details.classList.remove("hidden");
         authorizeBtn.textContent = "SIGN IN WALLET";
-        setMsg("read it, or paste it somewhere that will. nothing is signed yet.");
+        setMsg("");
         return;
       }
 

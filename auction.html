@@ -613,7 +613,7 @@
 
       if (!pendingMsgs) {                       // step 1: reveal, sign nothing
         setMsg("loading…");
-        try { sdk = sdk || await import("/lib/auction.js"); }
+        try { sdk = sdk || await import("/lib/auction.js?v=d3d60fb347"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
         buildMsgs();
         details.classList.remove("hidden");

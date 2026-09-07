@@ -363,9 +363,12 @@
         else if (now < Number(d.end_date))   el.innerHTML = head + "<b>open now</b> · closes " + stamp(Number(d.end_date));
         else                                 el.innerHTML = head + "closed " + stamp(Number(d.end_date));
       } else {
+        // The contract round does not exist yet, so there is no deposit window to show.
+        // auction_ending_timestamp is the chain auction's own close (28-day period) — the
+        // deadline the round has to happen before, not when deposits shut.
         var ends = Number(st.state.auction_ending_timestamp || 0);
-        el.innerHTML = "<b>round " + guess + "</b> · not opened yet · auction " + chainRound +
-                       (ends ? " ends " + stamp(ends) : "");
+        el.innerHTML = "<b>round " + guess + "</b> · not open yet" +
+                       (ends ? " · auction closes " + stamp(ends) : "");
       }
     }
     loadRound();

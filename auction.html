@@ -320,9 +320,19 @@
       }
       return null;
     }
-    function smartQuery(contract, obj) {
-      return lcdGet("/cosmwasm/wasm/v1/contract/" + contract + "/smart/" +
-                    encodeURIComponent(btoa(JSON.stringify(obj))));
+    async function smartQuery(contract, obj) {
+      var path = "/cosmwasm/wasm/v1/contract/" + contract + "/smart/" +
+                 encodeURIComponent(btoa(JSON.stringify(obj)));
+      for (var i = 0; i < LCDS.length; i++) {
+        try {
+          var r = await fetch(LCDS[i] + path, { cache: "no-store" });
+          var j = await r.json().catch(function () { return null; });
+          if (r.ok && j) return j;
+          // the node answered and the contract said no — that is final, stop asking mirrors
+          if (j && typeof j.message === "string") return null;
+        } catch (e) {}
+      }
+      return null;
     }
     var MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
     function stamp(unix) {

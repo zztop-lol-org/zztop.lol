@@ -469,7 +469,11 @@
         a.textContent = String(res.txHash).slice(0, 12) + "…";
         msg.appendChild(a);
       } catch (e) {
-        setMsg((e && (e.message || e.originalMessage)) || "grant failed", "err");
+        var m = (e && (e.message || e.originalMessage)) || "grant failed";
+        // a wallet that has never transacted has no account number to sign with
+        if (/account .* not found/i.test(m)) m = "this wallet has no Injective account yet — send it a little INJ, then try again";
+        else if (e && e.code === 4001) m = "cancelled in your wallet";
+        setMsg(m, "err");
         authorizeBtn.disabled = false;
       }
     });

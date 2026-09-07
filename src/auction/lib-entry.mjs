@@ -87,6 +87,19 @@ export async function pickEndpoint(endpoints, timeoutMs = 4000) {
   throw new Error("no Injective endpoint reachable" + (lastErr ? `: ${lastErr.message}` : ""));
 }
 
+/** Accept whatever shape the wallet hands back and return 0x-prefixed hex. */
+function normalizeSignature(sig) {
+  if (typeof sig === "string") return sig.startsWith("0x") ? sig : `0x${sig}`;
+  if (sig && typeof sig === "object") {
+    for (const k of ["signature", "result", "sig"]) {
+      if (typeof sig[k] === "string") return normalizeSignature(sig[k]);
+    }
+    if (sig instanceof Uint8Array || Array.isArray(sig))
+      return "0x" + Array.from(sig).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  throw new Error(`wallet returned an unexpected signature type: ${Object.prototype.toString.call(sig)}`);
+}
+
 /**
  * Prepare -> sign -> broadcast. `signTypedData(addressHex, jsonString)` is
  * supplied by the page so wallet plumbing stays where the rest of it lives.
@@ -118,9 +131,19 @@ export async function sendGrants({
     evmChainId,
   });
 
-  const signature = await signTypedData(ethereumAddress, JSON.stringify(eip712TypedData));
+  const raw = await signTypedData(ethereumAddress, JSON.stringify(eip712TypedData));
 
-  const publicKeyBase64 = hexToBase64(recoverTypedSignaturePubKey(eip712TypedData, signature));
+  // Wallets are not consistent here: most return a hex string, some wrap it.
+  const signature = normalizeSignature(raw);
+  if (!/^0x[0-9a-fA-F]{130}$/.test(signature))
+    throw new Error(`wallet returned a malformed signature (${(signature.length - 2) / 2} bytes)`);
+
+  // NOTE: recoverTypedSignaturePubKey is async. Without the await this hands a
+  // Promise to hexToBase64, which fails with "n.startsWith is not a function".
+  const publicKeyHex = await recoverTypedSignaturePubKey(eip712TypedData, signature);
+  if (typeof publicKeyHex !== "string")
+    throw new Error("could not recover the public key from that signature");
+  const publicKeyBase64 = hexToBase64(publicKeyHex);
 
   const { txRaw } = createTransaction({
     message: msgs,

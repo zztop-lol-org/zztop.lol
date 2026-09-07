@@ -120,6 +120,10 @@ async function getxapiUpload(env, mediaData, mediaType) {
   return mid;
 }
 
+// X rejects some media only at create time (too-short GIF, unrecognised type...).
+// The post itself is still fine, so we retry without the attachment.
+const MEDIA_REJECTED = /duration too short|media type unrecognized|invalid media|unsupported media|mediaid/i;
+
 async function getxapiCreate(env, text, mediaIds) {
   const payload = {
     auth_token: env.GETXAPI_AUTH_TOKEN,
@@ -205,10 +209,19 @@ export async function onRequestPost(context) {
         const mid = await getxapiUpload(env, bytesToB64(bytes), mtype);
         mediaIds = [mid];
       }
-      const res = await getxapiCreate(env, rec.text, mediaIds);
+      let res, droppedMedia = null;
+      try {
+        res = await getxapiCreate(env, rec.text, mediaIds);
+      } catch (e) {
+        if (!mediaIds || !MEDIA_REJECTED.test(e.message || "")) throw e;
+        droppedMedia = e.message;                       // post the words, lose the attachment
+        res = await getxapiCreate(env, rec.text, undefined);
+      }
       rec.status = "posted"; rec.url = res.url;
+      if (droppedMedia) rec.mediaDropped = droppedMedia;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
-      const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)");
+      const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)") +
+        (droppedMedia ? "\n⚠ attachment dropped — X rejected it: " + droppedMedia : "");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
       // also send the confirmation to the community group, with the submitter as an injscan link
       if (env.TELEGRAM_ANNOUNCE_CHAT_ID) {

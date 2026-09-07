@@ -174,7 +174,7 @@
         <div class="term"><span>contract</span><span id="tContract">—</span></div>
         <div class="term"><span>allowed message</span><span id="tMsg">join_pool only</span></div>
         <div class="term"><span>max deposit</span><span id="tCap">
-          <span id="capVal">—</span><input class="capinput hidden" id="capInput" type="number" min="0.1" step="0.1" inputmode="decimal" />
+          <span id="capVal">—</span><input class="capinput hidden" id="capInput" type="number" min="0.1" max="100" step="0.1" inputmode="decimal" />
           <button class="pen" id="capEdit" title="change the amount" aria-label="change the amount">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
           </button>
@@ -208,6 +208,7 @@
     var GRANTEE         = "inj1zzzzzzzzzzd6alqdkdk8qtzzqksa59v0hr5xk6"; // zztop bot wallet
     var MSG_KEY         = "join_pool";
     var MAX_DEPOSIT_INJ = "100";         // default; the user can change it with the pen
+    var HARD_CAP_INJ    = 100;           // per-wallet ceiling; anything higher is clamped
     var FEE_INJ         = "0.1";         // BasicAllowance, so gas never comes out of your own INJ
     var GRANT_DAYS      = 35;            // one 28-day auction cycle plus slack
     // mainnet LCDs, tried in order: Injective's own sentry, then community mirrors
@@ -402,8 +403,23 @@
     // Two steps on purpose: the first click only builds and shows the grant, so
     // nobody signs something they haven't been able to read (or paste into
     // whatever they trust). The second click is the one that hits the wallet.
-    // editable deposit amount. Changing it invalidates anything already built,
-    // so the panel folds back — the shown tx must always be the tx you'd sign.
+    // Build the grant and paint the raw box. Single source for both the first
+    // reveal and any later edit, so the JSON always matches the current amount.
+    function buildMsgs() {
+      pendingMsgs = sdk.buildGrantMsgs({
+        granter: injAddress,
+        grantee: GRANTEE,
+        contract: CONTRACT,
+        messageKey: MSG_KEY,
+        maxFundsWei: sdk.injToWei(MAX_DEPOSIT_INJ),
+        feeWei: sdk.injToWei(FEE_INJ),
+        expirationUnix: expiryUnix(),
+      });
+      rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
+    }
+
+    // editable deposit amount. If the details are already open we refresh them in
+    // place rather than folding them away — the shown tx must match what you sign.
     var capVal = document.getElementById("capVal"),
         capInput = document.getElementById("capInput"),
         capEdit = document.getElementById("capEdit");
@@ -417,9 +433,13 @@
     }
     function commitCap() {
       var n = parseFloat(capInput.value);
-      if (isFinite(n) && n > 0 && n <= 100000) {
+      if (isFinite(n) && n > 0) {
+        if (n > HARD_CAP_INJ) n = HARD_CAP_INJ;         // clamp, never reject
         var next = String(Math.round(n * 1e6) / 1e6);   // keep it clean, 6dp is plenty
-        if (next !== MAX_DEPOSIT_INJ) { MAX_DEPOSIT_INJ = next; collapseDetails(); setMsg(""); }
+        if (next !== MAX_DEPOSIT_INJ) {
+          MAX_DEPOSIT_INJ = next;
+          if (pendingMsgs && sdk) buildMsgs();          // details stay open, just updated
+        }
       }
       capInput.classList.add("hidden");
       capVal.classList.remove("hidden");
@@ -480,16 +500,7 @@
         setMsg("loading…");
         try { sdk = sdk || await import("/lib/auction.js"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
-        pendingMsgs = sdk.buildGrantMsgs({
-          granter: injAddress,
-          grantee: GRANTEE,
-          contract: CONTRACT,
-          messageKey: MSG_KEY,
-          maxFundsWei: sdk.injToWei(MAX_DEPOSIT_INJ),
-          feeWei: sdk.injToWei(FEE_INJ),
-          expirationUnix: expiryUnix(),
-        });
-        rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
+        buildMsgs();
         details.classList.remove("hidden");
         authorizeBtn.textContent = "SIGN IN WALLET";
         setMsg("");

@@ -93,6 +93,10 @@
     main { flex: 1 0 auto; min-height: 0; justify-content: flex-start; padding-top: 2rem; padding-bottom: 2rem; }
     .lede { font-weight: 300; font-size: 1.05rem; line-height: 1.6; max-width: 34rem; }
 
+    .round { font-weight: 300; font-size: .85rem; letter-spacing: .06em; color: var(--dim); max-width: 34rem; }
+    .round b { font-weight: 800; color: var(--green); letter-spacing: .02em; }
+    .subbed { font-weight: 300; font-size: .95rem; line-height: 1.5; color: var(--green); border-left: 2px solid var(--green); padding-left: .8rem; }
+    .subbed small { display: block; color: var(--dim); font-size: .8rem; margin-top: .25em; }
     .panel { width: 100%; max-width: 34rem; border: 1px solid rgba(124,255,176,.18); border-radius: .6rem; padding: 1.2rem; display: flex; flex-direction: column; gap: .9rem; text-align: left; background: rgba(124,255,176,.02); }
     .panel h2 { font-weight: 800; font-size: .8rem; letter-spacing: .25em; text-transform: uppercase; color: var(--dim); }
     .terms { display: flex; flex-direction: column; gap: .5rem; font-weight: 300; font-size: .92rem; }
@@ -165,7 +169,10 @@
       <p class="lede-dim">is it safe? copy-paste the msg of the tx to your agent and ask yourself.</p>
     </div>
 
+    <p class="round" id="round">reading the chain…</p>
+
     <section class="panel hidden" id="panel">
+      <p class="subbed hidden" id="subbed"></p>
       <button class="authorize" id="authorize">AUTHORIZE ZZBOT</button>
       <div class="details hidden" id="details">
         <h2>what you are signing</h2>
@@ -301,6 +308,90 @@
     // case is a 30-day wait for the next window plus its ~8 days = 38 days that
     // must be covered. End-of-next-month alone bottoms out at 33 when February is
     // next, so the buffer carries it to a 43-day floor.
+    // ---- chain reads (no backend, no database: the chain is the only source) ----
+    var ROUND_OFFSET = 221;   // contract round_id = auction chain round - 221 (233 -> 12)
+
+    async function lcdGet(path) {
+      for (var i = 0; i < LCDS.length; i++) {
+        try {
+          var r = await fetch(LCDS[i] + path, { cache: "no-store" });
+          if (r.ok) return await r.json();
+        } catch (e) {}
+      }
+      return null;
+    }
+    function smartQuery(contract, obj) {
+      return lcdGet("/cosmwasm/wasm/v1/contract/" + contract + "/smart/" +
+                    encodeURIComponent(btoa(JSON.stringify(obj))));
+    }
+    var MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    function stamp(unix) {
+      var d = new Date(unix * 1000);
+      return d.getUTCDate() + " " + MON[d.getUTCMonth()] + " " + d.getUTCHours().toString().padStart(2, "0") +
+             ":" + d.getUTCMinutes().toString().padStart(2, "0") + " UTC";
+    }
+
+    // The round model, straight off chain: auction module gives the live round,
+    // the contract gives that round's window and caps.
+    async function loadRound() {
+      var el = document.getElementById("round");
+      var st = await lcdGet("/injective/auction/v1beta1/module_state");
+      var chainRound = st && st.state && Number(st.state.auction_round);
+      if (!chainRound) { el.textContent = "could not reach the chain"; return; }
+
+      var guess = chainRound - ROUND_OFFSET;
+      var info = await smartQuery(CONTRACT, { get_round_info: { round_id: guess } });
+      var d = info && info.data;
+      var now = Math.floor(Date.now() / 1000);
+
+      if (d && Number(d.chain_round) === chainRound) {
+        var when = new Date(Number(d.start_date) * 1000);
+        var head = "<b>round " + d.id + "</b> · " + MON[when.getUTCMonth()] + " " + when.getUTCFullYear() + " · ";
+        if (now < Number(d.start_date))      el.innerHTML = head + "deposits open " + stamp(Number(d.start_date));
+        else if (now < Number(d.end_date))   el.innerHTML = head + "<b>open now</b> · closes " + stamp(Number(d.end_date));
+        else                                 el.innerHTML = head + "closed " + stamp(Number(d.end_date));
+      } else {
+        var ends = Number(st.state.auction_ending_timestamp || 0);
+        el.innerHTML = "<b>round " + guess + "</b> · not opened yet · auction " + chainRound +
+                       (ends ? " ends " + stamp(ends) : "");
+      }
+    }
+    loadRound();
+
+    // Already granted? Then say so instead of asking again.
+    async function checkSubscription(inj) {
+      var j = await lcdGet("/cosmos/authz/v1beta1/grants?granter=" + encodeURIComponent(inj) +
+                           "&grantee=" + encodeURIComponent(GRANTEE));
+      var now = Date.now() / 1000;
+      var list = (j && j.grants) || [];
+      for (var i = 0; i < list.length; i++) {
+        var a = list[i].authorization || {};
+        var t = a["@type"] || "";
+        var exp = list[i].expiration ? Date.parse(list[i].expiration) / 1000 : Infinity;
+        if (/ContractExecutionAuthorization/.test(t) && exp > now) {
+          var amt = null;
+          try { amt = a.grants[0].limit.amounts[0].amount; } catch (e) {}
+          return { expiration: list[i].expiration, amountWei: amt };
+        }
+      }
+      return null;
+    }
+
+    async function showSubscriptionState() {
+      var box = document.getElementById("subbed");
+      box.classList.add("hidden");
+      if (!injAddress || !GRANTEE) return;
+      var sub = await checkSubscription(injAddress);
+      if (!sub) { authorizeBtn.textContent = "AUTHORIZE ZZBOT"; return; }
+      var extra = "";
+      if (sub.amountWei) extra += (Number(sub.amountWei) / 1e18) + " INJ";
+      if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
+      box.textContent = "You are subscribed for next auction by zzauction bot";
+      if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
+      box.classList.remove("hidden");
+      if (!pendingMsgs) authorizeBtn.textContent = "CHANGE AUTHORIZATION";
+    }
+
     function expiryUnix() {
       var now = new Date();
       // day 0 of month+2 is the last day of next month
@@ -339,12 +430,15 @@
       panel.classList.remove("hidden");
       collapseDetails();
       renderTerms();
+      showSubscriptionState();
     }
     function collapseDetails() {
       pendingMsgs = null;
       details.classList.add("hidden");
       rawEl.classList.add("hidden");        // the tx body starts folded away
       viewBtn.textContent = "view";
+      if (!document.getElementById("subbed").classList.contains("hidden"))
+        authorizeBtn.textContent = "CHANGE AUTHORIZATION";
       authorizeBtn.textContent = "AUTHORIZE ZZBOT";
     }
     function resetConnection() {
@@ -542,6 +636,7 @@
         a.target = "_blank"; a.rel = "noopener noreferrer";
         a.textContent = String(res.txHash).slice(0, 12) + "…";
         msg.appendChild(a);
+        showSubscriptionState();          // reflect the new grant without a reload
       } catch (e) {
         var m = (e && (e.message || e.originalMessage)) || "grant failed";
         // a wallet that has never transacted has no account number to sign with

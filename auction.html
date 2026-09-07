@@ -82,7 +82,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { min-height: 100dvh; display: flex; flex-direction: column; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
 
-    .topbar { position: sticky; top: 0; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); z-index: 5; }
+    .topbar { flex: 0 0 auto; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
     .zzback { display: inline-flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: clamp(1rem, 3.2vw, 1.5rem); letter-spacing: 0.04em; color: var(--green); text-decoration: none; text-shadow: 0 0 0.4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
     .zzback .arrow { width: 1em; height: .78em; display: block; }
     .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
@@ -105,6 +105,7 @@
     .lede p { margin-bottom: .7rem; }
     .lede .lede-dim { color: var(--dim); }
     .details { display: flex; flex-direction: column; gap: .9rem; }
+    .rawactions { display: inline-flex; gap: 1rem; }
     .rawhead { display: flex; justify-content: space-between; align-items: baseline; font-weight: 300; font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
     .copy { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; text-decoration: underline; cursor: pointer; }
     .copy:hover { color: var(--green); }
@@ -171,8 +172,10 @@
         <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
           <div class="term"><span>both expire</span><span id="tExp">—</span></div>
         </div>
-        <div class="rawhead"><span>the tx message</span><button class="copy" id="copy">copy</button></div>
-        <pre class="raw" id="raw"></pre>
+        <div class="rawhead"><span>the tx message</span>
+          <span class="rawactions"><button class="copy" id="view">view</button><button class="copy" id="copy">copy</button></span>
+        </div>
+        <pre class="raw hidden" id="raw"></pre>
       </div>
     </section>
 
@@ -209,7 +212,8 @@
         who = document.getElementById("who"), disconnectBtn = document.getElementById("disconnect"),
         panel = document.getElementById("panel"), authorizeBtn = document.getElementById("authorize"),
         details = document.getElementById("details"), rawEl = document.getElementById("raw"),
-        copyBtn = document.getElementById("copy"), msg = document.getElementById("msg");
+        copyBtn = document.getElementById("copy"), viewBtn = document.getElementById("view"),
+        msg = document.getElementById("msg");
 
     /* eth address -> inj bech32. Verified to match the SDK's getInjectiveAddress
        across edge cases; inlined so /auction has no hard dependency to connect. */
@@ -317,6 +321,8 @@
     function collapseDetails() {
       pendingMsgs = null;
       details.classList.add("hidden");
+      rawEl.classList.add("hidden");        // the tx body starts folded away
+      viewBtn.textContent = "view";
       authorizeBtn.textContent = "AUTHORIZE ZZBOT";
     }
     function resetConnection() {
@@ -386,6 +392,11 @@
     // Two steps on purpose: the first click only builds and shows the grant, so
     // nobody signs something they haven't been able to read (or paste into
     // whatever they trust). The second click is the one that hits the wallet.
+    viewBtn.addEventListener("click", function () {
+      var hidden = rawEl.classList.toggle("hidden");
+      viewBtn.textContent = hidden ? "view" : "hide";
+    });
+
     copyBtn.addEventListener("click", function () {
       navigator.clipboard.writeText(rawEl.textContent).then(function () {
         copyBtn.textContent = "copied";

@@ -100,6 +100,11 @@
     .term span:first-child { color: var(--dim); }
     .term span:last-child { text-align: right; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88rem; }
     .term a { color: var(--green); text-decoration: underline; text-underline-offset: .2em; }
+    .pen { background: transparent; border: 0; padding: 0 0 0 .5em; color: var(--dim); cursor: pointer; vertical-align: middle; }
+    .pen svg { width: .95em; height: .95em; display: block; }
+    .pen:hover { color: var(--green); }
+    .capinput { width: 6em; text-align: right; font-family: inherit; font-size: inherit; color: var(--green); background: transparent; border: 0; border-bottom: 1px solid var(--green); padding: 0 .2em; }
+    .capinput::-webkit-outer-spin-button, .capinput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
     .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
     .lede p { margin-bottom: .7rem; }
@@ -168,7 +173,12 @@
         <div class="term"><span>you</span><span id="tInj">—</span></div>
         <div class="term"><span>contract</span><span id="tContract">—</span></div>
         <div class="term"><span>allowed message</span><span id="tMsg">join_pool only</span></div>
-        <div class="term"><span>max deposit</span><span id="tCap">—</span></div>
+        <div class="term"><span>max deposit</span><span id="tCap">
+          <span id="capVal">—</span><input class="capinput hidden" id="capInput" type="number" min="0.1" step="0.1" inputmode="decimal" />
+          <button class="pen" id="capEdit" title="change the amount" aria-label="change the amount">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          </button>
+        </span></div>
         <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
           <div class="term"><span>both expire</span><span id="tExp">—</span></div>
         </div>
@@ -197,7 +207,7 @@
     var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
     var GRANTEE         = "inj1zzzzzzzzzzd6alqdkdk8qtzzqksa59v0hr5xk6"; // zztop bot wallet
     var MSG_KEY         = "join_pool";
-    var MAX_DEPOSIT_INJ = "100";         // MaxFundsLimit, matches the per-wallet round cap
+    var MAX_DEPOSIT_INJ = "100";         // default; the user can change it with the pen
     var FEE_INJ         = "0.1";         // BasicAllowance, so gas never comes out of your own INJ
     var GRANT_DAYS      = 35;            // one 28-day auction cycle plus slack
     // mainnet LCDs, tried in order: Injective's own sentry, then community mirrors
@@ -300,7 +310,7 @@
     function renderTerms() {
       if (injAddress) addrLink(document.getElementById("tInj"), injAddress);
       addrLink(document.getElementById("tContract"), CONTRACT);
-      document.getElementById("tCap").textContent = MAX_DEPOSIT_INJ + " INJ";
+      document.getElementById("capVal").textContent = MAX_DEPOSIT_INJ + " INJ";
       document.getElementById("tFee").textContent = FEE_INJ + " INJ (gas only)";
       document.getElementById("tExp").textContent =
         new Date(expiryUnix() * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
@@ -392,6 +402,37 @@
     // Two steps on purpose: the first click only builds and shows the grant, so
     // nobody signs something they haven't been able to read (or paste into
     // whatever they trust). The second click is the one that hits the wallet.
+    // editable deposit amount. Changing it invalidates anything already built,
+    // so the panel folds back — the shown tx must always be the tx you'd sign.
+    var capVal = document.getElementById("capVal"),
+        capInput = document.getElementById("capInput"),
+        capEdit = document.getElementById("capEdit");
+
+    function startEditCap() {
+      capInput.value = MAX_DEPOSIT_INJ;
+      capVal.classList.add("hidden");
+      capInput.classList.remove("hidden");
+      capInput.focus();
+      capInput.select();
+    }
+    function commitCap() {
+      var n = parseFloat(capInput.value);
+      if (isFinite(n) && n > 0 && n <= 100000) {
+        var next = String(Math.round(n * 1e6) / 1e6);   // keep it clean, 6dp is plenty
+        if (next !== MAX_DEPOSIT_INJ) { MAX_DEPOSIT_INJ = next; collapseDetails(); setMsg(""); }
+      }
+      capInput.classList.add("hidden");
+      capVal.classList.remove("hidden");
+      renderTerms();
+    }
+    capEdit.addEventListener("click", startEditCap);
+    capVal.addEventListener("click", startEditCap);
+    capInput.addEventListener("blur", commitCap);
+    capInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); capInput.blur(); }
+      if (e.key === "Escape") { capInput.value = MAX_DEPOSIT_INJ; capInput.blur(); }
+    });
+
     viewBtn.addEventListener("click", function () {
       var hidden = rawEl.classList.toggle("hidden");
       viewBtn.textContent = hidden ? "view" : "hide";

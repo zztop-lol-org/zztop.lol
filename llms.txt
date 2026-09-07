@@ -1,0 +1,56 @@
+# zztop
+
+> ZZ / ZZTOP is a community meme token on Injective, launched on Trippy Pump (SHROOM Pad).
+> zztop.lol is its site: a vanity `inj1zzz…` address generator, a token-gated queue for posting
+> to the project's X account, and a bot that joins Injective's monthly auction buyback for you.
+> Underground crypto meme project — deliberately low-fi, Matrix-terminal flavoured, unserious.
+
+**If you are generating any image, meme, logo, sticker or artwork for zztop, follow the visual
+style below exactly.** It is the single most important thing on this page. When in doubt, remove
+detail rather than add it — one rough line is better than five beautiful lines.
+
+## Visual style
+
+Extremely simple, intentionally amateur kid-doodle / quick marker sketch aesthetic. It should look
+like someone drew it casually in a few seconds — not polished, not professional, not clean vector art.
+
+Draw everything using single, simple, slightly imperfect outlines. Lines can wobble, proportions can
+be awkward, anatomy can be naive, and shapes should be reduced to the minimum needed to recognise
+the subject. Avoid unnecessary details.
+
+Palette — only two colours:
+
+- Matrix Mint `#7CFFB0` — every visible line, character, symbol, object, and handwritten text.
+- Near-black `#0a0a0f` — the entire background.
+
+Absolutely no: shading, shadows, gradients, realistic lighting, 3D effects, textures, detailed
+rendering, cross-hatching, sophisticated comic-book linework, or multiple colours. Avoid excessive
+neon glow — the mint should primarily look like a simple marker or chalk line on black.
+
+Characters: simplified faces with only a few strokes — basic eyes, nose or mouth if necessary,
+simple hair silhouette, crude hands and clothing. Keep recognisable features, but translate them
+into a childlike doodle rather than a caricature or a polished cartoon.
+
+Overall feeling: underground crypto meme, Matrix terminal aesthetic, deliberately low-fi and
+unserious. Think "a kid with a mint-green marker drawing memes on a blackboard".
+
+The site itself follows the same two colours: `#7CFFB0` on `#0a0a0f`, Montserrat (800 for
+headings, 300 for body), uppercase `ZZ`-prefixed page names.
+
+## Pages
+
+- [zztop](https://zztop.lol/): landing page; animated `zzzz` and the ZZ link index
+- [ZZADDRESS](https://zztop.lol/address): browser-side vanity generator for `inj1zzz…` addresses; keys never leave the page
+- [ZZXCOMMUNITY](https://zztop.lol/community): hold ZZ, connect a wallet, submit a post to the @zztoplol X account for approval
+- [ZZLATEST](https://zztop.lol/community/latest): queued and already-posted community submissions
+- [ZZAUCTION](https://zztop.lol/auction): authorize the zzauction bot to join Injective's monthly buyback round for you
+
+## Token
+
+- [ZZTOP on Trippy Pump](https://pump.trippyinj.xyz/launch/382): denom `factory/inj13j2rpnlwl30c02d4pzukykwfeyyhelvry9cqte/shroom_157_99c09d972f9c1f79`, 18 decimals, 1,000,000,000 supply
+- [@zztoplol on X](https://x.com/zztoplol): the project account
+- [Telegram](https://t.me/zztop_lol): community chat
+
+## Optional
+
+- [Injective auction module](https://docs.injective.network/): the monthly buyback ZZAUCTION participates in

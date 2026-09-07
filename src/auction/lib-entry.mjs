@@ -21,7 +21,7 @@ import {
   createTxRawEIP712,
   createWeb3Extension,
   TxRestApi,
-  SIGN_AMINO,
+  SIGN_EIP712_V2,
   recoverTypedSignaturePubKey,
   hexToBase64,
   hexToUint8Array,
@@ -181,7 +181,11 @@ async function sendOne({
   const { txRaw } = createTransaction({
     message: msgs,
     memo,
-    signMode: SIGN_AMINO,
+    // MUST match the typed data we signed. getEip712TypedDataV2 produces the V2 payload
+    // (msgs as a JSON string); SIGN_AMINO/SIGN_EIP712 are both 127, which makes the chain
+    // rebuild the LEGACY payload instead and the signature then fails to verify with
+    // "unable to verify signer signature of EIP712 typed data". V2 is 128.
+    signMode: SIGN_EIP712_V2,
     fee: getDefaultStdFee(),
     pubKey: publicKeyBase64,
     sequence: baseAccount.sequence,

@@ -99,6 +99,7 @@
     .term { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
     .term span:first-child { color: var(--dim); }
     .term span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .term a { color: var(--green); text-decoration: underline; text-underline-offset: .2em; }
     .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
     .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
     .lede p { margin-bottom: .7rem; }
@@ -163,7 +164,7 @@
       <div class="details hidden" id="details">
         <h2>what you are signing</h2>
         <div class="terms">
-        <div class="term"><span>your address</span><span id="tInj">—</span></div>
+        <div class="term"><span>you</span><span id="tInj">—</span></div>
         <div class="term"><span>contract</span><span id="tContract">—</span></div>
         <div class="term"><span>allowed message</span><span id="tMsg">join_pool only</span></div>
         <div class="term"><span>max deposit</span><span id="tCap">—</span></div>
@@ -201,7 +202,8 @@
                            "https://injective-rest.publicnode.com",
                            "https://injective-api.polkachu.com"];
     var CHAIN_ID        = "injective-1";
-    var EVM_CHAIN_ID    = 1776;
+    var EVM_CHAIN_ID    = 1776;          // Injective EVM; the same network as injective-1
+    var EVM_CHAIN_HEX   = "0x6f0";
 
     var connectBtn = document.getElementById("connect"), picker = document.getElementById("picker"),
         who = document.getElementById("who"), disconnectBtn = document.getElementById("disconnect"),
@@ -280,9 +282,20 @@
 
     function expiryUnix() { return Math.floor(Date.now() / 1000) + GRANT_DAYS * 86400; }
 
+    var shortAddr = function (a) { return a.slice(0, 4) + "…" + a.slice(-4); };
+    function addrLink(el, addr) {
+      el.textContent = "";
+      var a = document.createElement("a");
+      a.href = "https://injscan.com/account/" + addr;
+      a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.title = addr;                       // full address on hover
+      a.textContent = shortAddr(addr);
+      el.appendChild(a);
+    }
+
     function renderTerms() {
-      document.getElementById("tInj").textContent = injAddress || "—";
-      document.getElementById("tContract").textContent = CONTRACT;
+      if (injAddress) addrLink(document.getElementById("tInj"), injAddress);
+      addrLink(document.getElementById("tContract"), CONTRACT);
       document.getElementById("tCap").textContent = MAX_DEPOSIT_INJ + " INJ";
       document.getElementById("tFee").textContent = FEE_INJ + " INJ (gas only)";
       document.getElementById("tExp").textContent =
@@ -380,6 +393,34 @@
       }, function () {});
     });
 
+    // eth_signTypedData_v4 validates domain.chainId against the wallet's active
+    // chain, so a wallet sitting on Ethereum would simply refuse to sign.
+    async function ensureInjectiveChain() {
+      var current;
+      try { current = await selectedProvider.request({ method: "eth_chainId" }); }
+      catch (e) { return; }                       // wallet won't say; let the sign attempt decide
+      if (String(current).toLowerCase() === EVM_CHAIN_HEX) return;
+      setMsg("switching your wallet to Injective…");
+      try {
+        await selectedProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: EVM_CHAIN_HEX }] });
+      } catch (e) {
+        var unknown = e && (e.code === 4902 || /unrecognized|not added|unsupported chain/i.test(e.message || ""));
+        if (!unknown) throw e;
+        await selectedProvider.request({ method: "wallet_addEthereumChain", params: [{
+          chainId: EVM_CHAIN_HEX,
+          chainName: "Injective EVM",
+          nativeCurrency: { name: "Injective", symbol: "INJ", decimals: 18 },
+          rpcUrls: ["https://sentry.evm-rpc.injective.network/"],
+          blockExplorerUrls: ["https://blockscout.injective.network/"],
+        }] });
+      }
+      try {
+        var now = await selectedProvider.request({ method: "eth_chainId" });
+        if (String(now).toLowerCase() !== EVM_CHAIN_HEX)
+          throw new Error("switch your wallet to the Injective network (chain 1776) and try again");
+      } catch (e) { if (e && e.message) throw e; }
+    }
+
     authorizeBtn.addEventListener("click", async function () {
       if (!account || !injAddress || !GRANTEE) return;
 
@@ -405,6 +446,7 @@
 
       authorizeBtn.disabled = true;             // step 2: sign + broadcast
       try {
+        await ensureInjectiveChain();
         setMsg("finding a healthy endpoint…");
         var picked = await sdk.pickEndpoint(LCDS);
         setMsg("sign in your wallet — one signature covers both grants…");

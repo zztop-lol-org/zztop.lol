@@ -210,7 +210,7 @@
     var MAX_DEPOSIT_INJ = "100";         // default; the user can change it with the pen
     var HARD_CAP_INJ    = 100;           // per-wallet ceiling; anything higher is clamped
     var FEE_INJ         = "0.1";         // BasicAllowance, so gas never comes out of your own INJ
-    var GRANT_DAYS      = 35;            // one 28-day auction cycle plus slack
+    var GRANT_BUFFER_DAYS = 15;          // slack past the end of next month, see expiryUnix
     // mainnet LCDs, tried in order: Injective's own sentry, then community mirrors
     var LCDS            = ["https://sentry.lcd.injective.network",
                            "https://injective-rest.publicnode.com",
@@ -295,7 +295,18 @@
       return list;
     }
 
-    function expiryUnix() { return Math.floor(Date.now() / 1000) + GRANT_DAYS * 86400; }
+    // A fixed calendar date rather than a rolling window, so every grant issued in
+    // the same period expires together: end of NEXT month, plus a buffer.
+    // Rounds run every 26-30 days (not monthly - June 2026 had two), so the worst
+    // case is a 30-day wait for the next window plus its ~8 days = 38 days that
+    // must be covered. End-of-next-month alone bottoms out at 33 when February is
+    // next, so the buffer carries it to a 43-day floor.
+    function expiryUnix() {
+      var now = new Date();
+      // day 0 of month+2 is the last day of next month
+      var endOfNextMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59);
+      return Math.floor(endOfNextMonth / 1000) + GRANT_BUFFER_DAYS * 86400;
+    }
 
     var shortAddr = function (a) { return a.slice(0, 8) + "…" + a.slice(-4); };  // inj1 + first four + last four
     function addrLink(el, addr) {

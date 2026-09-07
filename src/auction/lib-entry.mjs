@@ -12,6 +12,7 @@ import {
   MsgGrantWithAuthorization,
   MsgGrantAllowance,
   MsgRevokeAllowance,
+  MsgRevoke,
   ContractExecutionAuthz,
   BaseAccount,
   ChainRestAuthApi,
@@ -73,6 +74,19 @@ export function buildGrantParts({ granter, grantee, contract, messageKey, maxFun
   // must be revoked first. authz itself overwrites cleanly (SaveGrant keys on
   // granter/grantee/msgTypeURL), so it never needs a revoke.
   return { authz, feegrant, revoke: MsgRevokeAllowance.fromJSON({ granter, grantee }) };
+}
+
+/**
+ * The two messages that undo a grant. Same rule as granting: different message
+ * types, so they cannot share a transaction.
+ *   - MsgRevoke removes the authz grant, keyed by the message type it authorized
+ *   - MsgRevokeAllowance removes the fee allowance
+ */
+export function buildRevokeParts({ granter, grantee }) {
+  return {
+    authz: MsgRevoke.fromJSON({ granter, grantee, messageType: "/cosmwasm.wasm.v1.MsgExecuteContract" }),
+    feegrant: MsgRevokeAllowance.fromJSON({ granter, grantee }),
+  };
 }
 
 /**

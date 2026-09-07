@@ -111,6 +111,9 @@
     .capinput::-webkit-outer-spin-button, .capinput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
     .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+    /* cancelling is a secondary, destructive action — outline, not the green CTA */
+    .authorize.secondary { background: transparent; color: var(--dim); border: 1px solid var(--dim); box-shadow: none; }
+    .authorize.secondary:hover { color: var(--green); border-color: var(--green); }
     .lede p { margin-bottom: .7rem; }
     .lede .lede-dim { color: var(--dim); }
     .details { display: flex; flex-direction: column; gap: .9rem; }
@@ -277,6 +280,7 @@
 
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
     var pendingGroups = null; // one entry per transaction; built on click 1, signed on click 2
+    var cancelMode = false;   // true once a live grant is found: the button undoes it
     var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
@@ -418,14 +422,25 @@
       box.classList.add("hidden");
       if (!injAddress || !GRANTEE) return;
       var sub = await checkSubscription(injAddress);
-      if (!sub) { authorizeBtn.textContent = "AUTHORIZE ZZBOT"; return; }
+      if (!sub) {
+        cancelMode = false;
+        capEdit.classList.remove("hidden");
+        authorizeBtn.classList.remove("secondary");
+        if (!pendingGroups) authorizeBtn.textContent = "AUTHORIZE ZZBOT";
+        return;
+      }
       var extra = "";
       if (sub.amountWei) extra += (Number(sub.amountWei) / 1e18) + " INJ";
       if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
       box.textContent = "You are subscribed for next auction by zzauction bot";
       if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
       box.classList.remove("hidden");
-      if (!pendingGroups) authorizeBtn.textContent = "CHANGE AUTHORIZATION";
+      cancelMode = true;
+      capEdit.classList.add("hidden");          // nothing to choose when you are cancelling
+      if (!pendingGroups) {
+        authorizeBtn.textContent = "CANCEL THE GRANT";
+        authorizeBtn.classList.add("secondary");
+      }
     }
 
     function expiryUnix() {
@@ -473,8 +488,8 @@
       details.classList.add("hidden");
       rawEl.classList.add("hidden");        // the tx body starts folded away
       viewBtn.textContent = "view";
-      if (!document.getElementById("subbed").classList.contains("hidden"))
-        authorizeBtn.textContent = "CHANGE AUTHORIZATION";
+      authorizeBtn.textContent = cancelMode ? "CANCEL THE GRANT" : "AUTHORIZE ZZBOT";
+      authorizeBtn.classList.toggle("secondary", cancelMode);
       authorizeBtn.textContent = "AUTHORIZE ZZBOT";
     }
     function resetConnection() {
@@ -549,6 +564,14 @@
     // Each transaction may carry only ONE message type (the chain rebuilds EIP-712 with a
     // single shared MsgValue), so this returns a list of transactions to sign in order.
     async function buildMsgs() {
+      if (cancelMode) {
+        var rp = sdk.buildRevokeParts({ granter: injAddress, grantee: GRANTEE });
+        var al2 = await getAllowance(injAddress);
+        pendingGroups = [{ label: "remove the authorization", msgs: [rp.authz] }];
+        if (al2.exists) pendingGroups.push({ label: "remove the fee allowance", msgs: [rp.feegrant] });
+        paintGroups();
+        return;
+      }
       var exp = expiryUnix();
       var parts = sdk.buildGrantParts({
         granter: injAddress,
@@ -571,6 +594,10 @@
       pendingGroups.push({ label: "authorize join_pool", msgs: [parts.authz] });
       if (!keepAllowance) pendingGroups.push({ label: "fee allowance", msgs: [parts.feegrant] });
 
+      paintGroups();
+    }
+
+    function paintGroups() {
       var n = pendingGroups.length;
       sigNote.textContent = n === 1 ? "one signature" : n + " separate signatures, one per transaction";
       rawEl.textContent = pendingGroups.map(function (g, i) {
@@ -659,11 +686,11 @@
 
       if (!pendingGroups) {                       // step 1: reveal, sign nothing
         setMsg("loading…");
-        try { sdk = sdk || await import("/lib/auction.js?v=25f16bd08d"); }
+        try { sdk = sdk || await import("/lib/auction.js?v=33a5a22499"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
         await buildMsgs();
         details.classList.remove("hidden");
-        authorizeBtn.textContent = "SIGN IN WALLET";
+        authorizeBtn.textContent = cancelMode ? "SIGN TO CANCEL" : "SIGN IN WALLET";
         setMsg("");
         return;
       }
@@ -689,7 +716,8 @@
           },
         });
         msg.className = "msg ok";
-        msg.textContent = "authorized — ";
+        msg.textContent = (cancelMode ? "grant cancelled — " : "authorized — ");
+        collapseDetails();
         res.forEach(function (r, i) {
           if (i) msg.appendChild(document.createTextNode(" · "));
           var a = document.createElement("a");

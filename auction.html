@@ -98,7 +98,7 @@
     .terms { display: flex; flex-direction: column; gap: .5rem; font-weight: 300; font-size: .92rem; }
     .term { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
     .term span:first-child { color: var(--dim); }
-    .term span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .term span:last-child { text-align: right; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88rem; }
     .term a { color: var(--green); text-decoration: underline; text-underline-offset: .2em; }
     .authorize { font-weight: 800; font-size: 1.1rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .7em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
     .authorize:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
@@ -282,7 +282,7 @@
 
     function expiryUnix() { return Math.floor(Date.now() / 1000) + GRANT_DAYS * 86400; }
 
-    var shortAddr = function (a) { return a.slice(0, 4) + "…" + a.slice(-4); };
+    var shortAddr = function (a) { return a.slice(0, 8) + "…" + a.slice(-4); };  // inj1 + first four + last four
     function addrLink(el, addr) {
       el.textContent = "";
       var a = document.createElement("a");

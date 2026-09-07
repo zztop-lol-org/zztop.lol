@@ -423,9 +423,6 @@
       if (sub.amountWei) extra += (Number(sub.amountWei) / 1e18) + " INJ";
       if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
       box.textContent = "You are subscribed for next auction by zzauction bot";
-      var note = document.createElement("small");
-      note.textContent = "signing again replaces this authorization — it does not add to it";
-      box.appendChild(note);
       if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
       box.classList.remove("hidden");
       if (!pendingGroups) authorizeBtn.textContent = "CHANGE AUTHORIZATION";

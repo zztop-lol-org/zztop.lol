@@ -38,11 +38,15 @@ export function injToWei(amount) {
 }
 
 /**
- * Build the two grant messages. Kept separate from signing so the page can show
- * the user exactly what they are about to authorize.
+ * Build the individual grant messages.
+ *
+ * They must be broadcast in SEPARATE transactions. Injective rebuilds the EIP-712
+ * payload during signature verification using a single shared `MsgValue` type taken
+ * from the first message, so a tx mixing MsgGrant with MsgGrantAllowance fails with
+ *   provided data '<nil>' doesn't match type 'TypeGrant'
+ * One message type per transaction, one signature each.
  */
-export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFundsWei, feeWei,
-                                 expirationUnix, revokeExistingAllowance = false }) {
+export function buildGrantParts({ granter, grantee, contract, messageKey, maxFundsWei, feeWei, expirationUnix }) {
   const authorization = ContractExecutionAuthz.fromJSON({
     contract,
     filter: { acceptedMessagesKeys: [messageKey] },
@@ -65,14 +69,10 @@ export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFund
     },
   });
 
-  // x/feegrant has no upsert: GrantAllowance returns "fee allowance already exists" if one is
-  // already there, which reverts the WHOLE tx and silently takes the authz half down with it.
-  // (authz itself overwrites fine — SaveGrant keys on granter/grantee/msgTypeURL and Set()s.)
-  // Only revoke when one actually exists; revoking a missing allowance is itself an error.
-  const msgs = [];
-  if (revokeExistingAllowance) msgs.push(MsgRevokeAllowance.fromJSON({ granter, grantee }));
-  msgs.push(authz, feegrant);
-  return msgs;
+  // x/feegrant has no upsert: GrantAllowance rejects a duplicate, so an existing allowance
+  // must be revoked first. authz itself overwrites cleanly (SaveGrant keys on
+  // granter/grantee/msgTypeURL), so it never needs a revoke.
+  return { authz, feegrant, revoke: MsgRevokeAllowance.fromJSON({ granter, grantee }) };
 }
 
 /**
@@ -110,17 +110,41 @@ function normalizeSignature(sig) {
 }
 
 /**
- * Prepare -> sign -> broadcast. `signTypedData(addressHex, jsonString)` is
- * supplied by the page so wallet plumbing stays where the rest of it lives.
+ * Sign and broadcast a list of transactions in order, one wallet signature each.
+ * `groups` is [{ label, msgs }] where every msgs array holds ONE message type.
+ * The account is refetched between transactions because the previous one advances
+ * the sequence.
  */
-export async function sendGrants({
+export async function sendGrantTxs({
+  ethereumAddress,
+  injectiveAddress,
+  groups,
+  restEndpoint,
+  chainId,
+  evmChainId,
+  memo = "zzauction grant",
+  signTypedData,
+  onStep,
+}) {
+  const results = [];
+  for (let i = 0; i < groups.length; i++) {
+    if (onStep) onStep(i, groups.length, groups[i].label);
+    results.push(await sendOne({
+      ethereumAddress, injectiveAddress, msgs: groups[i].msgs,
+      restEndpoint, chainId, evmChainId, memo, signTypedData,
+    }));
+  }
+  return results;
+}
+
+async function sendOne({
   ethereumAddress,
   injectiveAddress,
   msgs,
   restEndpoint,
   chainId,
   evmChainId,
-  memo = "zzauction grant",
+  memo,
   signTypedData,
 }) {
   const accountResponse = await new ChainRestAuthApi(restEndpoint).fetchAccount(injectiveAddress);

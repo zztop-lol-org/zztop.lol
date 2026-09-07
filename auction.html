@@ -189,6 +189,7 @@
         <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
           <div class="term"><span>both expire</span><span id="tExp">—</span></div>
         </div>
+        <div class="term"><span>signatures</span><span id="sigNote">—</span></div>
         <div class="rawhead"><span>the tx message</span>
           <span class="rawactions"><button class="copy" id="view">view</button><button class="copy" id="copy">copy</button></span>
         </div>
@@ -231,6 +232,7 @@
         panel = document.getElementById("panel"), authorizeBtn = document.getElementById("authorize"),
         details = document.getElementById("details"), rawEl = document.getElementById("raw"),
         copyBtn = document.getElementById("copy"), viewBtn = document.getElementById("view"),
+        sigNote = document.getElementById("sigNote"),
         msg = document.getElementById("msg");
 
     /* eth address -> inj bech32. Verified to match the SDK's getInjectiveAddress
@@ -274,7 +276,7 @@
     }
 
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
-    var pendingMsgs = null;   // built on the first click, signed on the second
+    var pendingGroups = null; // one entry per transaction; built on click 1, signed on click 2
     var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
@@ -371,17 +373,22 @@
     // Does a fee allowance already exist for this wallet? The chain answers a missing one
     // with HTTP 500 {"code":13,"message":"fee-grant not found"} — an answer, not a failure.
     // Getting this wrong in either direction breaks a signature, so treat unknown as "none".
-    async function hasAllowance(inj) {
+    async function getAllowance(inj) {
       var path = "/cosmos/feegrant/v1beta1/allowance/" + encodeURIComponent(inj) + "/" + encodeURIComponent(GRANTEE);
       for (var i = 0; i < LCDS.length; i++) {
         try {
           var r = await fetch(LCDS[i] + path, { cache: "no-store" });
           var j = await r.json().catch(function () { return null; });
-          if (r.ok && j) return !!j.allowance;
-          if (j && typeof j.message === "string" && /not found/i.test(j.message)) return false;
+          if (r.ok && j && j.allowance) {
+            var exp = null;
+            try { exp = j.allowance.allowance.expiration; } catch (e) {}
+            return { exists: true, expiration: exp };
+          }
+          if (r.ok && j) return { exists: false };
+          if (j && typeof j.message === "string" && /not found/i.test(j.message)) return { exists: false };
         } catch (e) {}
       }
-      return false;
+      return { exists: false };
     }
 
     // Already granted? Then say so instead of asking again.
@@ -418,7 +425,7 @@
       box.appendChild(note);
       if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
       box.classList.remove("hidden");
-      if (!pendingMsgs) authorizeBtn.textContent = "CHANGE AUTHORIZATION";
+      if (!pendingGroups) authorizeBtn.textContent = "CHANGE AUTHORIZATION";
     }
 
     function expiryUnix() {
@@ -462,7 +469,7 @@
       showSubscriptionState();
     }
     function collapseDetails() {
-      pendingMsgs = null;
+      pendingGroups = null;
       details.classList.add("hidden");
       rawEl.classList.add("hidden");        // the tx body starts folded away
       viewBtn.textContent = "view";
@@ -539,19 +546,37 @@
     // whatever they trust). The second click is the one that hits the wallet.
     // Build the grant and paint the raw box. Single source for both the first
     // reveal and any later edit, so the JSON always matches the current amount.
+    // Each transaction may carry only ONE message type (the chain rebuilds EIP-712 with a
+    // single shared MsgValue), so this returns a list of transactions to sign in order.
     async function buildMsgs() {
-      var revoke = await hasAllowance(injAddress);   // prepend a revoke only if one is there
-      pendingMsgs = sdk.buildGrantMsgs({
-        revokeExistingAllowance: revoke,
+      var exp = expiryUnix();
+      var parts = sdk.buildGrantParts({
         granter: injAddress,
         grantee: GRANTEE,
         contract: CONTRACT,
         messageKey: MSG_KEY,
         maxFundsWei: sdk.injToWei(MAX_DEPOSIT_INJ),
         feeWei: sdk.injToWei(FEE_INJ),
-        expirationUnix: expiryUnix(),
+        expirationUnix: exp,
       });
-      rawEl.textContent = JSON.stringify(pendingMsgs.map(function (m) { return m.toAmino(); }), null, 2);
+
+      var al = await getAllowance(injAddress);
+      var alExpires = al.expiration ? Math.floor(Date.parse(al.expiration) / 1000) : 0;
+      // keep a fee allowance that already outlasts the new authorization; otherwise replace it
+      var keepAllowance = al.exists && alExpires >= exp;
+      var needRevoke = al.exists && !keepAllowance;
+
+      pendingGroups = [];
+      if (needRevoke) pendingGroups.push({ label: "replace fee allowance", msgs: [parts.revoke] });
+      pendingGroups.push({ label: "authorize join_pool", msgs: [parts.authz] });
+      if (!keepAllowance) pendingGroups.push({ label: "fee allowance", msgs: [parts.feegrant] });
+
+      var n = pendingGroups.length;
+      sigNote.textContent = n === 1 ? "one signature" : n + " separate signatures, one per transaction";
+      rawEl.textContent = pendingGroups.map(function (g, i) {
+        return "// tx " + (i + 1) + " of " + n + " — " + g.label + "\n" +
+               JSON.stringify(g.msgs.map(function (m) { return m.toAmino(); }), null, 2);
+      }).join("\n\n");
     }
 
     // editable deposit amount. If the details are already open we refresh them in
@@ -574,7 +599,7 @@
         var next = String(Math.round(n * 1e6) / 1e6);   // keep it clean, 6dp is plenty
         if (next !== MAX_DEPOSIT_INJ) {
           MAX_DEPOSIT_INJ = next;
-          if (pendingMsgs && sdk) buildMsgs();          // details stay open, just updated (async)
+          if (pendingGroups && sdk) buildMsgs();          // details stay open, just updated (async)
         }
       }
       capInput.classList.add("hidden");
@@ -632,9 +657,9 @@
     authorizeBtn.addEventListener("click", async function () {
       if (!account || !injAddress || !GRANTEE) return;
 
-      if (!pendingMsgs) {                       // step 1: reveal, sign nothing
+      if (!pendingGroups) {                       // step 1: reveal, sign nothing
         setMsg("loading…");
-        try { sdk = sdk || await import("/lib/auction.js?v=edabdc0e5a"); }
+        try { sdk = sdk || await import("/lib/auction.js?v=91275494cc"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
         await buildMsgs();
         details.classList.remove("hidden");
@@ -649,24 +674,30 @@
         setMsg("finding a healthy endpoint…");
         var picked = await sdk.pickEndpoint(LCDS);
         setMsg("sign in your wallet — one signature covers both grants…");
-        var res = await sdk.sendGrants({
+        var res = await sdk.sendGrantTxs({
           ethereumAddress: account,
           injectiveAddress: injAddress,
-          msgs: pendingMsgs,
+          groups: pendingGroups,
           restEndpoint: picked.endpoint,
           chainId: CHAIN_ID,
           evmChainId: EVM_CHAIN_ID,
           signTypedData: function (addr, json) {
             return selectedProvider.request({ method: "eth_signTypedData_v4", params: [addr, json] });
           },
+          onStep: function (i, total, label) {
+            setMsg("signature " + (i + 1) + " of " + total + " — " + label + "…");
+          },
         });
         msg.className = "msg ok";
         msg.textContent = "authorized — ";
-        var a = document.createElement("a");
-        a.href = "https://explorer.injective.network/transaction/" + res.txHash;
-        a.target = "_blank"; a.rel = "noopener noreferrer";
-        a.textContent = String(res.txHash).slice(0, 12) + "…";
-        msg.appendChild(a);
+        res.forEach(function (r, i) {
+          if (i) msg.appendChild(document.createTextNode(" · "));
+          var a = document.createElement("a");
+          a.href = "https://explorer.injective.network/transaction/" + r.txHash;
+          a.target = "_blank"; a.rel = "noopener noreferrer";
+          a.textContent = String(r.txHash).slice(0, 10) + "…";
+          msg.appendChild(a);
+        });
         showSubscriptionState();          // reflect the new grant without a reload
       } catch (e) {
         var m = (e && (e.message || e.originalMessage)) || "grant failed";

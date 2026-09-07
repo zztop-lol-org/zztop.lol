@@ -368,6 +368,22 @@
     }
     loadRound();
 
+    // Does a fee allowance already exist for this wallet? The chain answers a missing one
+    // with HTTP 500 {"code":13,"message":"fee-grant not found"} — an answer, not a failure.
+    // Getting this wrong in either direction breaks a signature, so treat unknown as "none".
+    async function hasAllowance(inj) {
+      var path = "/cosmos/feegrant/v1beta1/allowance/" + encodeURIComponent(inj) + "/" + encodeURIComponent(GRANTEE);
+      for (var i = 0; i < LCDS.length; i++) {
+        try {
+          var r = await fetch(LCDS[i] + path, { cache: "no-store" });
+          var j = await r.json().catch(function () { return null; });
+          if (r.ok && j) return !!j.allowance;
+          if (j && typeof j.message === "string" && /not found/i.test(j.message)) return false;
+        } catch (e) {}
+      }
+      return false;
+    }
+
     // Already granted? Then say so instead of asking again.
     async function checkSubscription(inj) {
       var j = await lcdGet("/cosmos/authz/v1beta1/grants?granter=" + encodeURIComponent(inj) +
@@ -397,6 +413,9 @@
       if (sub.amountWei) extra += (Number(sub.amountWei) / 1e18) + " INJ";
       if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
       box.textContent = "You are subscribed for next auction by zzauction bot";
+      var note = document.createElement("small");
+      note.textContent = "signing again replaces this authorization — it does not add to it";
+      box.appendChild(note);
       if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
       box.classList.remove("hidden");
       if (!pendingMsgs) authorizeBtn.textContent = "CHANGE AUTHORIZATION";
@@ -520,8 +539,10 @@
     // whatever they trust). The second click is the one that hits the wallet.
     // Build the grant and paint the raw box. Single source for both the first
     // reveal and any later edit, so the JSON always matches the current amount.
-    function buildMsgs() {
+    async function buildMsgs() {
+      var revoke = await hasAllowance(injAddress);   // prepend a revoke only if one is there
       pendingMsgs = sdk.buildGrantMsgs({
+        revokeExistingAllowance: revoke,
         granter: injAddress,
         grantee: GRANTEE,
         contract: CONTRACT,
@@ -553,7 +574,7 @@
         var next = String(Math.round(n * 1e6) / 1e6);   // keep it clean, 6dp is plenty
         if (next !== MAX_DEPOSIT_INJ) {
           MAX_DEPOSIT_INJ = next;
-          if (pendingMsgs && sdk) buildMsgs();          // details stay open, just updated
+          if (pendingMsgs && sdk) buildMsgs();          // details stay open, just updated (async)
         }
       }
       capInput.classList.add("hidden");
@@ -613,9 +634,9 @@
 
       if (!pendingMsgs) {                       // step 1: reveal, sign nothing
         setMsg("loading…");
-        try { sdk = sdk || await import("/lib/auction.js?v=d3d60fb347"); }
+        try { sdk = sdk || await import("/lib/auction.js?v=edabdc0e5a"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
-        buildMsgs();
+        await buildMsgs();
         details.classList.remove("hidden");
         authorizeBtn.textContent = "SIGN IN WALLET";
         setMsg("");
@@ -651,6 +672,7 @@
         var m = (e && (e.message || e.originalMessage)) || "grant failed";
         // a wallet that has never transacted has no account number to sign with
         if (/account .* not found/i.test(m)) m = "this wallet has no Injective account yet — send it a little INJ, then try again";
+        else if (/fee allowance already exists/i.test(m)) m = "you already have a fee allowance — reload the page and try again";
         else if (e && e.code === 4001) m = "cancelled in your wallet";
         setMsg(m, "err");
         authorizeBtn.disabled = false;

@@ -11,6 +11,7 @@
 import {
   MsgGrantWithAuthorization,
   MsgGrantAllowance,
+  MsgRevokeAllowance,
   ContractExecutionAuthz,
   BaseAccount,
   ChainRestAuthApi,
@@ -40,7 +41,8 @@ export function injToWei(amount) {
  * Build the two grant messages. Kept separate from signing so the page can show
  * the user exactly what they are about to authorize.
  */
-export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFundsWei, feeWei, expirationUnix }) {
+export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFundsWei, feeWei,
+                                 expirationUnix, revokeExistingAllowance = false }) {
   const authorization = ContractExecutionAuthz.fromJSON({
     contract,
     filter: { acceptedMessagesKeys: [messageKey] },
@@ -63,7 +65,14 @@ export function buildGrantMsgs({ granter, grantee, contract, messageKey, maxFund
     },
   });
 
-  return [authz, feegrant];
+  // x/feegrant has no upsert: GrantAllowance returns "fee allowance already exists" if one is
+  // already there, which reverts the WHOLE tx and silently takes the authz half down with it.
+  // (authz itself overwrites fine — SaveGrant keys on granter/grantee/msgTypeURL and Set()s.)
+  // Only revoke when one actually exists; revoking a missing allowance is itself an error.
+  const msgs = [];
+  if (revokeExistingAllowance) msgs.push(MsgRevokeAllowance.fromJSON({ granter, grantee }));
+  msgs.push(authz, feegrant);
+  return msgs;
 }
 
 /**

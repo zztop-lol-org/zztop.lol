@@ -755,7 +755,7 @@
         await ensureInjectiveChain();
         setMsg("finding a healthy endpoint…");
         var picked = await sdk.pickEndpoint(LCDS);
-        setMsg("sign in your wallet — one signature covers both grants…");
+        setMsg("sign in your wallet…");
         var res = await sdk.sendGrantTxs({
           ethereumAddress: account,
           injectiveAddress: injAddress,
@@ -781,7 +781,8 @@
           a.textContent = String(r.txHash).slice(0, 10) + "…";
           msg.appendChild(a);
         });
-        showSubscriptionState();          // reflect the new grant without a reload
+        await showSubscriptionState();     // reflect the new state without a reload
+        setTimeout(showSubscriptionState, 2500);   // a mirror can lag a beat behind the commit
       } catch (e) {
         var m = (e && (e.message || e.originalMessage)) || "grant failed";
         // a wallet that has never transacted has no account number to sign with
@@ -789,7 +790,10 @@
         else if (/fee allowance already exists/i.test(m)) m = "you already have a fee allowance — reload the page and try again";
         else if (e && e.code === 4001) m = "cancelled in your wallet";
         setMsg(m, "err");
-        authorizeBtn.disabled = false;
+      } finally {
+        // must re-enable on SUCCESS too, or the button is dead until a reload:
+        // sign -> cancel and cancel -> sign both go through this same button
+        authorizeBtn.disabled = !GRANTEE;
       }
     });
   </script>

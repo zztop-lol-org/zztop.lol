@@ -344,17 +344,20 @@
 
     // ---- link rows on the same grid, left-aligned under the leftmost Z ----
     const ROWGAP = 1.2;          // vertical spacing between rows, in em
-    // stacked ABOVE the Z row, lexicographic top-to-bottom: ZZCHART, ZZTELEGRAM, ZZZZ...
-    // ZZTELEGRAM (row -1) appears first, ZZCHART (row -2) appears above it next.
+    // stacked ABOVE the Z row, lexicographic top-to-bottom: ZZAUCTION, ZZCHART, ZZTELEGRAM, ZZZZ...
+    // ZZX (row -1) appears first, each one above it follows.
     const LINKS = [
       { text: "ZZX",        href: "https://x.com/zztoplol",                row: -1, order: 0 },
       { text: "ZZTELEGRAM", href: "https://t.me/zztop_lol",               row: -2, order: 1 },
       { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -3, order: 2 },
+      { text: "ZZAUCTION",  href: "/auction",                             row: -4, order: 3, internal: true },
     ];
     const linkRows = LINKS.map((L) => {
       const a = document.createElement("a");
       a.className = "linkrow";
-      a.href = L.href; a.target = "_blank"; a.rel = "noopener";
+      a.href = L.href;
+      if (L.internal) a.dataset.dir = "forward";   // same tab, and the slide transition applies
+      else { a.target = "_blank"; a.rel = "noopener"; }
       a.setAttribute("aria-label", L.text.toLowerCase());
       for (const ch of L.text) {
         const c = document.createElement("span");
@@ -442,7 +445,7 @@
 
       // --- Phase D: link rows rise into place ABOVE the Z row (0.77 -> 0.97) ---
       linkRows.forEach((L) => {
-        const start = 0.74 + L.order * 0.05;         // ZZX first, then ZZTELEGRAM, then ZZCHART
+        const start = 0.74 + L.order * 0.04;         // tightened so the 4th row still lands by 1.0
         const t = smooth(seg(p, start, start + 0.14));
         const y = L.row * ROWGAP + (1 - t) * 0.6;    // rise up into place
         L.a.style.opacity = t.toFixed(3);

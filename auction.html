@@ -358,7 +358,6 @@
       var chainRound = st && st.state && Number(st.state.auction_round);
       if (!chainRound) { el.textContent = "could not reach the chain"; return; }
       auctionEndsAt = Number(st.state.auction_ending_timestamp || 0);
-      if (injAddress) renderTerms();     // the expiry depends on it, so repaint
 
       var guess = chainRound - ROUND_OFFSET;
       var info = await smartQuery(CONTRACT, { get_round_info: { round_id: guess } });
@@ -366,12 +365,18 @@
       var now = Math.floor(Date.now() / 1000);
 
       if (d && Number(d.chain_round) === chainRound) {
+        // remember what the expiry calculation needs, then repaint the terms
+        roundOpensAt = Number(d.start_date) || 0;
+        try { roundRemaining = BigInt(d.round_cap) - BigInt(d.total_deposit); } catch (e) {}
+        var cfg = await smartQuery(CONTRACT, { config: {} });
+        try { minUserWei = BigInt(cfg.data.min_user_allocation); } catch (e) {}
         var when = new Date(Number(d.start_date) * 1000);
         var head = "<b>round " + d.id + "</b> · " + MON[when.getUTCMonth()] + " " + when.getUTCFullYear() + " · ";
         if (now < Number(d.start_date))      el.innerHTML = head + "deposits open " + stamp(Number(d.start_date));
         else if (now < Number(d.end_date))   el.innerHTML = head + "<b>open now</b> · closes " + stamp(Number(d.end_date));
         else                                 el.innerHTML = head + "closed " + stamp(Number(d.end_date));
       } else {
+        roundOpensAt = 0; roundRemaining = null;   // nothing to reach in this cycle yet
         // The contract round does not exist yet, so there is no deposit window to show.
         // auction_ending_timestamp is the chain auction's own close (28-day period) — the
         // deadline the round has to happen before, not when deposits shut.
@@ -379,6 +384,7 @@
         el.innerHTML = "<b>round " + guess + "</b> · not open yet" +
                        (ends ? " · auction closes " + stamp(ends) : "");
       }
+      if (injAddress) renderTerms();     // the expiry depends on all of the above
     }
     loadRound();
 
@@ -452,13 +458,26 @@
     // dies shortly after the round it was made for and has to be signed again next
     // month. Taken from the chain's own auction close rather than the calendar —
     // rounds run a 28-day cadence and drift out of sync with months.
-    var auctionEndsAt = 0;               // filled in by loadRound()
+    // all filled in by loadRound()
+    var auctionEndsAt = 0;     // this auction's close
+    var roundOpensAt = 0;      // this cycle's deposit window opens (0 = round not created)
+    var roundRemaining = null; // BigInt wei still free in the round cap
+    var minUserWei = 10n ** 18n;   // contract's min_user_allocation, 1 INJ by default
+
+    // Which auction can this signature still reach? Not "is the auction nearly over" —
+    // a round fills in about 97 seconds, so the moment deposits OPEN the current cycle
+    // is gone for anyone still signing, and they are really signing for the next one.
+    // Rolling on the auction close instead would hand them a grant that dies ~19 days
+    // before the round they signed up for, with no signal that anything was wrong.
     function expiryUnix() {
       var now = Math.floor(Date.now() / 1000);
-      var target = auctionEndsAt;
-      if (!target) target = now + AUCTION_PERIOD_DAYS * 86400;      // chain unreachable
-      else if (target - now < 3 * 86400)                            // too late for this cycle,
-        target += AUCTION_PERIOD_DAYS * 86400;                      //   so aim at the next one
+      if (!auctionEndsAt) return now + AUCTION_PERIOD_DAYS * 86400 + GRANT_BUFFER_DAYS * 86400;
+
+      var missed = now > auctionEndsAt;                     // cycle already over
+      if (roundOpensAt && now > roundOpensAt) missed = true; // deposits opened: too late
+      if (roundRemaining !== null && roundRemaining < minUserWei) missed = true; // cap full
+
+      var target = auctionEndsAt + (missed ? AUCTION_PERIOD_DAYS * 86400 : 0);
       return target + GRANT_BUFFER_DAYS * 86400;
     }
 

@@ -441,14 +441,10 @@
         var r = await fetch("/api/whitelist?addr=" + encodeURIComponent(injAddress), { cache: "no-store" });
         var j = await r.json();
         if (!r.ok || j.listed !== false) return;      // eligible, or we could not tell — say nothing
-        // name the round: the list churns ~5% per round, so "not eligible" would imply a
-        // permanence the data does not have and stop someone checking again next month
-        box.textContent = "this wallet is not on round " + j.round_id + "'s eligibility list";
+        // the list churns ~5% a round, so this is about the PREVIOUS round, not a verdict
+        box.textContent = "this wallet is not on the previous round eligibility list";
         var sm = document.createElement("small");
-        sm.textContent = "the contract admins curate that list (" + j.list_size.toLocaleString() +
-          " addresses) and it changes every round — hundreds were added for round " + j.round_id +
-          " who were not on the one before. you can still authorize; join_pool is rejected unless " +
-          "they add you before the round opens. worth checking again next month.";
+        sm.textContent = "you can still authorize though";
         box.appendChild(sm);
         box.classList.remove("hidden");
       } catch (e) { /* never block signing on this check */ }

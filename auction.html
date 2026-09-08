@@ -190,7 +190,7 @@
           </button>
         </span></div>
         <div class="term"><span>fee allowance</span><span id="tFee">—</span></div>
-          <div class="term"><span>both expire</span><span id="tExp">—</span></div>
+          <div class="term"><span>expires after this round</span><span id="tExp">—</span></div>
         </div>
         <div class="term"><span>signatures</span><span id="sigNote">—</span></div>
         <div class="rawhead"><span>the tx message</span>
@@ -223,7 +223,8 @@
     var FEE_INJ         = "0.005";       // BasicAllowance for gas. join_pool via authz measures
                                          // ~363k gas and the bot bids with a 700k limit; at the
                                          // 160M inj/gas floor that is ~0.000112 INJ a deposit.
-    var GRANT_BUFFER_DAYS = 15;          // slack past the end of next month, see expiryUnix
+    var GRANT_BUFFER_DAYS = 2;           // slack past the auction close, see expiryUnix
+    var AUCTION_PERIOD_DAYS = 28;        // auction_period 2419200s, from the module params
     // mainnet LCDs, tried in order: Injective's own sentry, then community mirrors
     var LCDS            = ["https://sentry.lcd.injective.network",
                            "https://injective-rest.publicnode.com",
@@ -356,6 +357,8 @@
       var st = await lcdGet("/injective/auction/v1beta1/module_state");
       var chainRound = st && st.state && Number(st.state.auction_round);
       if (!chainRound) { el.textContent = "could not reach the chain"; return; }
+      auctionEndsAt = Number(st.state.auction_ending_timestamp || 0);
+      if (injAddress) renderTerms();     // the expiry depends on it, so repaint
 
       var guess = chainRound - ROUND_OFFSET;
       var info = await smartQuery(CONTRACT, { get_round_info: { round_id: guess } });
@@ -445,11 +448,18 @@
       }
     }
 
+    // One round per grant: the table starts clean every auction, so an authorization
+    // dies shortly after the round it was made for and has to be signed again next
+    // month. Taken from the chain's own auction close rather than the calendar —
+    // rounds run a 28-day cadence and drift out of sync with months.
+    var auctionEndsAt = 0;               // filled in by loadRound()
     function expiryUnix() {
-      var now = new Date();
-      // day 0 of month+2 is the last day of next month
-      var endOfNextMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59);
-      return Math.floor(endOfNextMonth / 1000) + GRANT_BUFFER_DAYS * 86400;
+      var now = Math.floor(Date.now() / 1000);
+      var target = auctionEndsAt;
+      if (!target) target = now + AUCTION_PERIOD_DAYS * 86400;      // chain unreachable
+      else if (target - now < 3 * 86400)                            // too late for this cycle,
+        target += AUCTION_PERIOD_DAYS * 86400;                      //   so aim at the next one
+      return target + GRANT_BUFFER_DAYS * 86400;
     }
 
     var shortAddr = function (a) { return a.slice(0, 8) + "…" + a.slice(-4); };  // inj1 + first four + last four

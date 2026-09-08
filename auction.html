@@ -96,6 +96,8 @@
     .round { font-weight: 300; font-size: .85rem; letter-spacing: .06em; color: var(--dim); max-width: 34rem; }
     .round b { font-weight: 800; color: var(--green); letter-spacing: .02em; }
     .subbed { font-weight: 300; font-size: .95rem; line-height: 1.5; color: var(--green); border-left: 2px solid var(--green); padding-left: .8rem; }
+    .notlisted { font-weight: 300; font-size: .95rem; line-height: 1.5; color: #ffcf8f; border-left: 2px solid #ffcf8f; padding-left: .8rem; }
+    .notlisted small { display: block; color: var(--dim); font-size: .8rem; margin-top: .25em; }
     .subbed small { display: block; color: var(--dim); font-size: .8rem; margin-top: .25em; }
     .panel { width: 100%; max-width: 34rem; border: 1px solid rgba(124,255,176,.18); border-radius: .6rem; padding: 1.2rem; display: flex; flex-direction: column; gap: .9rem; text-align: left; background: rgba(124,255,176,.02); }
     .panel h2 { font-weight: 800; font-size: .8rem; letter-spacing: .25em; text-transform: uppercase; color: var(--dim); }
@@ -176,6 +178,7 @@
 
     <section class="panel hidden" id="panel">
       <p class="subbed hidden" id="subbed"></p>
+      <p class="notlisted hidden" id="notlisted"></p>
       <button class="authorize" id="authorize">AUTHORIZE ZZBOT</button>
       <div class="details hidden" id="details">
         <h2>what you are signing</h2>
@@ -428,6 +431,26 @@
       return null;
     }
 
+    // The grant does not bypass the contract's own eligibility list — join_pool
+    // rejects "Address not whitelisted". Worth knowing BEFORE paying gas for a grant.
+    async function showEligibility() {
+      var box = document.getElementById("notlisted");
+      box.classList.add("hidden");
+      if (!injAddress) return;
+      try {
+        var r = await fetch("/api/whitelist?addr=" + encodeURIComponent(injAddress), { cache: "no-store" });
+        var j = await r.json();
+        if (!r.ok || j.listed !== false) return;      // eligible, or we could not tell — say nothing
+        box.textContent = "this wallet is not on the auction's eligibility list";
+        var sm = document.createElement("small");
+        sm.textContent = "the contract admins control that list (" + j.list_size.toLocaleString() +
+          " addresses as of round " + j.round_id + "). you can still authorize, but join_pool " +
+          "would be rejected unless they add you.";
+        box.appendChild(sm);
+        box.classList.remove("hidden");
+      } catch (e) { /* never block signing on this check */ }
+    }
+
     async function showSubscriptionState() {
       var box = document.getElementById("subbed");
       box.classList.add("hidden");
@@ -513,6 +536,7 @@
       collapseDetails();
       renderTerms();
       showSubscriptionState();
+      showEligibility();
     }
     function collapseDetails() {
       pendingGroups = null;
@@ -525,6 +549,7 @@
     }
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
+      document.getElementById("notlisted").classList.add("hidden");
       collapseDetails();
       who.textContent = "";
       disconnectBtn.classList.add("hidden");

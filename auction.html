@@ -221,7 +221,8 @@
     var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
     var GRANTEE         = "inj1zzzzzzzzzzd6alqdkdk8qtzzqksa59v0hr5xk6"; // zztop bot wallet
     var MSG_KEY         = "join_pool";
-    var MAX_DEPOSIT_INJ = "100";         // default; the user can change it with the pen
+    var DEFAULT_DEPOSIT_INJ = "100";     // what a fresh authorization starts at
+    var MAX_DEPOSIT_INJ = DEFAULT_DEPOSIT_INJ;  // the user can change it with the pen
     var HARD_CAP_INJ    = 100;           // per-wallet ceiling; anything higher is clamped
     var FEE_INJ         = "0.005";       // BasicAllowance for gas. join_pool via authz measures
                                          // ~363k gas and the bot bids with a 700k limit; at the
@@ -457,18 +458,23 @@
       var sub = await checkSubscription(injAddress);
       if (!sub) {
         cancelMode = false;
+        MAX_DEPOSIT_INJ = DEFAULT_DEPOSIT_INJ;   // back to a fresh authorization
+        renderTerms();
         capEdit.classList.remove("hidden");
         authorizeBtn.classList.remove("secondary");
         if (!pendingGroups) authorizeBtn.textContent = "AUTHORIZE ZZBOT";
         return;
       }
       var extra = "";
-      if (sub.amountWei) extra += (Number(sub.amountWei) / 1e18) + " INJ";
+      if (sub.amountWei) extra += weiToInj(sub.amountWei) + " INJ";
       if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
       box.textContent = "You are subscribed for next auction by zzauction bot";
       if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
       box.classList.remove("hidden");
       cancelMode = true;
+      // show the amount they actually granted, not the default, and freeze it
+      if (sub.amountWei) MAX_DEPOSIT_INJ = weiToInj(sub.amountWei);
+      renderTerms();
       capEdit.classList.add("hidden");          // nothing to choose when you are cancelling
       if (!pendingGroups) {
         authorizeBtn.textContent = "CANCEL THE GRANT";
@@ -501,6 +507,14 @@
 
       var target = auctionEndsAt + (missed ? AUCTION_PERIOD_DAYS * 86400 : 0);
       return target + GRANT_BUFFER_DAYS * 86400;
+    }
+
+    function weiToInj(wei) {
+      try {
+        var w = BigInt(wei), whole = w / 10n ** 18n, frac = w % 10n ** 18n;
+        if (!frac) return whole.toString();
+        return whole.toString() + "." + frac.toString().padStart(18, "0").replace(/0+$/, "");
+      } catch (e) { return String(Number(wei) / 1e18); }
     }
 
     var shortAddr = function (a) { return a.slice(0, 8) + "…" + a.slice(-4); };  // inj1 + first four + last four
@@ -668,6 +682,7 @@
         capEdit = document.getElementById("capEdit");
 
     function startEditCap() {
+      if (cancelMode) return;                   // the granted amount is not editable
       capInput.value = MAX_DEPOSIT_INJ;
       capVal.classList.add("hidden");
       capInput.classList.remove("hidden");

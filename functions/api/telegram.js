@@ -155,6 +155,80 @@ async function getxapiCreate(env, text, mediaIds) {
   return { id, url };
 }
 
+
+// --- /burnt ---------------------------------------------------------------
+// Public. How much ZZTOP the buyback has taken out of supply, read from the
+// chain rather than from any record we keep: total supply only ever falls, and
+// the launch minted a round billion, so the difference is the burn.
+const ZZTOP_DENOM = "factory/inj13j2rpnlwl30c02d4pzukykwfeyyhelvry9cqte/shroom_157_99c09d972f9c1f79";
+const ZZTOP_INITIAL = 1000000000000000000000000000n; // 1,000,000,000 at 18 decimals
+const ZZTOP_LCDS = [
+  "https://sentry.lcd.injective.network",
+  "https://injective-rest.publicnode.com",
+  "https://injective-api.polkachu.com",
+];
+
+// Thousands separators and a fixed number of decimals, done in BigInt. An
+// 18-decimal supply does not survive a float: 999,998,160.74 tokens is already
+// past the point where Number starts rounding the ones column.
+function formatUnits(wei, dp) {
+  const unit = 10n ** 18n;
+  const whole = (wei / unit).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (dp <= 0) return whole;
+  const frac = (wei % unit).toString().padStart(18, "0").slice(0, dp);
+  return `${whole}.${frac}`;
+}
+
+// Percent to six places, kept as an integer scaled by a million so nothing is
+// lost on the way. A burn too small to show at that precision reports as less
+// than the smallest figure rather than as zero — "0.0%" would be a lie about
+// something that did happen.
+function formatPercent(part, whole) {
+  if (whole === 0n || part === 0n) return "0.0";
+  const scaled = (part * 100n * 1000000n) / whole;
+  if (scaled === 0n) return "<0.000001";
+  const s = scaled.toString().padStart(7, "0");
+  return `${s.slice(0, -6)}.${s.slice(-6)}`.replace(/0+$/, "").replace(/\.$/, ".0");
+}
+
+async function zztopSupply() {
+  let lastErr;
+  for (const base of ZZTOP_LCDS) {
+    try {
+      const r = await fetch(`${base}/cosmos/bank/v1beta1/supply/by_denom?denom=${encodeURIComponent(ZZTOP_DENOM)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const amount = j && j.amount && j.amount.amount;
+      if (!amount) throw new Error("no amount in response");
+      return BigInt(amount);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("no endpoint answered");
+}
+
+async function sendBurnt(env, chatId) {
+  let supply;
+  try {
+    supply = await zztopSupply();
+  } catch {
+    return tg(env, "sendMessage", { chat_id: chatId, text: "could not reach the chain just now — try again in a moment" });
+  }
+
+  const burned = ZZTOP_INITIAL > supply ? ZZTOP_INITIAL - supply : 0n;
+  const text = [
+    "🔥 <b>" + formatUnits(burned, 2) + " ZZTOP</b> burned",
+    "",
+    formatPercent(burned, ZZTOP_INITIAL) + "% of the 1,000,000,000 minted at launch",
+    "<code>" + formatUnits(supply, 2) + "</code> still in supply",
+    "",
+    "<i>the buyback buys ZZTOP with INJ and burns every token it gets</i>",
+  ].join("\n");
+
+  return tg(env, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+}
+
 export async function onRequestPost(context) {
   const { request, env, waitUntil } = context;
   if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET)
@@ -167,6 +241,10 @@ export async function onRequestPost(context) {
   const msg = update.message;
   if (msg && typeof msg.text === "string") {
     const [cmd, ...args] = msg.text.trim().split(/\s+/);
+    if (cmd.split("@")[0] === "/burnt") {
+      waitUntil(sendBurnt(env, msg.chat.id));
+      return json({ ok: true });
+    }
     if (cmd.split("@")[0] === "/tweets") {
       if (!adminIds(env).includes(String(msg.from && msg.from.id))) return json({ ok: true });
       waitUntil(sendTweetReport(env, msg.chat.id, args.some((a) => a.toLowerCase() === "all")));

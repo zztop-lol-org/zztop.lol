@@ -208,12 +208,23 @@ async function zztopSupply() {
   throw lastErr || new Error("no endpoint answered");
 }
 
-async function sendBurnt(env, chatId) {
+// A short memo, held per isolate. /burnt is public and lives in a group, so it
+// can be asked twenty times in a row by someone bored; the answer only changes
+// when a burn lands, every few minutes.
+let burntCache = { at: 0, supply: 0n };
+
+async function sendBurnt(env, chatId, replyTo) {
   let supply;
-  try {
-    supply = await zztopSupply();
-  } catch {
-    return tg(env, "sendMessage", { chat_id: chatId, text: "could not reach the chain just now — try again in a moment" });
+  const now = Date.now();
+  if (burntCache.supply > 0n && now - burntCache.at < 15000) {
+    supply = burntCache.supply;
+  } else {
+    try {
+      supply = await zztopSupply();
+      burntCache = { at: now, supply };
+    } catch {
+      return tg(env, "sendMessage", { chat_id: chatId, text: "could not reach the chain just now — try again in a moment" });
+    }
   }
 
   const burned = ZZTOP_INITIAL > supply ? ZZTOP_INITIAL - supply : 0n;
@@ -226,7 +237,14 @@ async function sendBurnt(env, chatId) {
     "<i>the buyback buys ZZTOP with INJ and burns every token it gets</i>",
   ].join("\n");
 
-  return tg(env, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  const payload = { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true };
+  if (replyTo) {
+    // In a group the answer should hang off the question, not arrive loose in
+    // the middle of a conversation. Tolerates the question being deleted first.
+    payload.reply_to_message_id = replyTo;
+    payload.allow_sending_without_reply = true;
+  }
+  return tg(env, "sendMessage", payload);
 }
 
 export async function onRequestPost(context) {
@@ -238,11 +256,16 @@ export async function onRequestPost(context) {
   try { update = await request.json(); } catch { return json({ ok: true }); }
   // /tweets [all] — admin-only CSV export. Silent for everyone else so the bot
   // gives nothing away to strangers who poke at it.
-  const msg = update.message;
+  // channel_post, not message, is how a post in a broadcast channel arrives —
+  // and a bot must be an administrator there to receive one at all. In groups
+  // and supergroups the bot can stay an ordinary member: privacy mode still
+  // delivers anything beginning with a slash.
+  const msg = update.message || update.channel_post;
   if (msg && typeof msg.text === "string") {
     const [cmd, ...args] = msg.text.trim().split(/\s+/);
     if (cmd.split("@")[0] === "/burnt") {
-      waitUntil(sendBurnt(env, msg.chat.id));
+      const inGroup = msg.chat && msg.chat.type !== "private";
+      waitUntil(sendBurnt(env, msg.chat.id, inGroup ? msg.message_id : null));
       return json({ ok: true });
     }
     if (cmd.split("@")[0] === "/tweets") {

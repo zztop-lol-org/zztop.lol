@@ -116,6 +116,9 @@
     /* cancelling is a secondary, destructive action — outline, not the green CTA */
     .authorize.secondary { background: transparent; color: var(--dim); border: 1px solid var(--dim); box-shadow: none; }
     .authorize.secondary:hover { color: var(--green); border-color: var(--green); }
+    .altaction { display: block; margin: .6rem auto 0; background: none; border: 0; padding: 0; font: inherit; font-size: .8rem; color: var(--dim); text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+    .altaction:hover { color: var(--green); }
+    .subbed.short { color: #ffcf8f; border-left-color: #ffcf8f; }
     .lede p { margin-bottom: .7rem; }
     .lede .lede-dim { color: var(--dim); }
     .details { display: flex; flex-direction: column; gap: .9rem; }
@@ -180,6 +183,7 @@
       <p class="subbed hidden" id="subbed"></p>
       <p class="notlisted hidden" id="notlisted"></p>
       <button class="authorize" id="authorize">AUTHORIZE ZZBOT</button>
+      <button class="altaction hidden" id="altaction"></button>
       <div class="details hidden" id="details">
         <h2>what you are signing</h2>
         <div class="terms">
@@ -242,7 +246,7 @@
         panel = document.getElementById("panel"), authorizeBtn = document.getElementById("authorize"),
         details = document.getElementById("details"), rawEl = document.getElementById("raw"),
         copyBtn = document.getElementById("copy"), viewBtn = document.getElementById("view"),
-        sigNote = document.getElementById("sigNote"),
+        sigNote = document.getElementById("sigNote"), altBtn = document.getElementById("altaction"),
         msg = document.getElementById("msg");
 
     /* eth address -> inj bech32. Verified to match the SDK's getInjectiveAddress
@@ -288,6 +292,7 @@
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
     var pendingGroups = null; // one entry per transaction; built on click 1, signed on click 2
     var cancelMode = false;   // true once a live grant is found: the button undoes it
+    var topUpMode  = false;   // authorized, but the fee allowance can no longer pay for a call
     var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
@@ -402,9 +407,13 @@
           var r = await fetch(LCDS[i] + path, { cache: "no-store" });
           var j = await r.json().catch(function () { return null; });
           if (r.ok && j && j.allowance) {
-            var exp = null;
+            var exp = null, amt = null;   // amt null = no spend_limit, i.e. an unlimited allowance
             try { exp = j.allowance.allowance.expiration; } catch (e) {}
-            return { exists: true, expiration: exp };
+            try {
+              var sl = j.allowance.allowance.spend_limit;
+              if (sl && sl.length) for (var k = 0; k < sl.length; k++) if (sl[k].denom === "inj") amt = sl[k].amount;
+            } catch (e) {}
+            return { exists: true, expiration: exp, amountWei: amt };
           }
           if (r.ok && j) return { exists: false };
           if (j && typeof j.message === "string" && /not found/i.test(j.message)) return { exists: false };
@@ -454,10 +463,12 @@
     async function showSubscriptionState() {
       var box = document.getElementById("subbed");
       box.classList.add("hidden");
+      box.classList.remove("short");
+      altBtn.classList.add("hidden");
       if (!injAddress || !GRANTEE) return;
       var sub = await checkSubscription(injAddress);
       if (!sub) {
-        cancelMode = false;
+        cancelMode = false; topUpMode = false;
         MAX_DEPOSIT_INJ = DEFAULT_DEPOSIT_INJ;   // back to a fresh authorization
         renderTerms();
         capEdit.classList.remove("hidden");
@@ -465,20 +476,42 @@
         if (!pendingGroups) authorizeBtn.textContent = "AUTHORIZE ZZBOT";
         return;
       }
-      var extra = "";
-      if (sub.amountWei) extra += weiToInj(sub.amountWei) + " INJ";
-      if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
-      box.textContent = "You are subscribed for next auction by zzauction bot";
-      if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
+      // Authorized is not the same as payable. The fee allowance is a BasicAllowance
+      // that shrinks as the bot spends it, so a wallet can hold a perfectly valid
+      // authz and still have too little left to cover a single join_pool. Say so:
+      // otherwise the round passes, nothing happens, and the reason was invisible.
+      var al = await getAllowance(injAddress);
+      var need = injToWeiLocal(FEE_INJ);
+      var have = !al.exists ? 0n : (al.amountWei === null ? null : BigInt(al.amountWei));
+      var short = have !== null && have < need;
+
+      if (short) {
+        topUpMode = true; cancelMode = false;
+        box.classList.add("short");
+        box.textContent = "authorized, but the fee allowance cannot cover a bid";
+        var sm2 = document.createElement("small");
+        sm2.textContent = (have > 0n ? weiToInj(have.toString()) + " INJ left of " + FEE_INJ
+                                     : "nothing left of " + FEE_INJ) +
+                          " INJ · top it up or the bot cannot bid for you";
+        box.appendChild(sm2);
+      } else {
+        topUpMode = false; cancelMode = true;
+        var extra = "";
+        if (sub.amountWei) extra += weiToInj(sub.amountWei) + " INJ";
+        if (sub.expiration) extra += (extra ? " · " : "") + "until " + stamp(Date.parse(sub.expiration) / 1000);
+        box.textContent = "You are subscribed for next auction by zzauction bot";
+        if (extra) { var sm = document.createElement("small"); sm.textContent = extra; box.appendChild(sm); }
+      }
       box.classList.remove("hidden");
-      cancelMode = true;
       // show the amount they actually granted, not the default, and freeze it
       if (sub.amountWei) MAX_DEPOSIT_INJ = weiToInj(sub.amountWei);
       renderTerms();
-      capEdit.classList.add("hidden");          // nothing to choose when you are cancelling
+      capEdit.classList.add("hidden");          // nothing to choose unless you are granting afresh
       if (!pendingGroups) {
-        authorizeBtn.textContent = "CANCEL THE GRANT";
-        authorizeBtn.classList.add("secondary");
+        authorizeBtn.textContent = topUpMode ? "TOP UP THE FEE" : "CANCEL THE GRANT";
+        authorizeBtn.classList.toggle("secondary", !topUpMode);
+        altBtn.textContent = "cancel the grant instead";
+        altBtn.classList.toggle("hidden", !topUpMode);
       }
     }
 
@@ -517,6 +550,12 @@
       } catch (e) { return String(Number(wei) / 1e18); }
     }
 
+    // FEE_INJ as wei without waiting for the signing bundle to load.
+    function injToWeiLocal(amount) {
+      var p = String(amount).split("."), frac = (p[1] || "") + "000000000000000000";
+      return BigInt(p[0] || "0") * 10n ** 18n + BigInt(frac.slice(0, 18));
+    }
+
     var shortAddr = function (a) { return a.slice(0, 8) + "…" + a.slice(-4); };  // inj1 + first four + last four
     function addrLink(el, addr) {
       el.textContent = "";
@@ -548,7 +587,12 @@
       panel.classList.remove("hidden");
       collapseDetails();
       renderTerms();
-      showSubscriptionState();
+      // Nothing is clickable until the grant lookup returns: a click before it lands
+      // takes the default AUTHORIZE path and builds a fresh grant for a wallet that
+      // is already subscribed, leaving the banner and the button disagreeing.
+      authorizeBtn.disabled = true;
+      showSubscriptionState().then(function () { authorizeBtn.disabled = !GRANTEE; },
+                                   function () { authorizeBtn.disabled = !GRANTEE; });
       showEligibility();
     }
     function collapseDetails() {
@@ -556,9 +600,9 @@
       details.classList.add("hidden");
       rawEl.classList.add("hidden");        // the tx body starts folded away
       viewBtn.textContent = "view";
-      authorizeBtn.textContent = cancelMode ? "CANCEL THE GRANT" : "AUTHORIZE ZZBOT";
-      authorizeBtn.classList.toggle("secondary", cancelMode);
-      authorizeBtn.textContent = "AUTHORIZE ZZBOT";
+      authorizeBtn.textContent = topUpMode ? "TOP UP THE FEE"
+                               : cancelMode ? "CANCEL THE GRANT" : "AUTHORIZE ZZBOT";
+      authorizeBtn.classList.toggle("secondary", cancelMode && !topUpMode);
     }
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
@@ -633,6 +677,21 @@
     // Each transaction may carry only ONE message type (the chain rebuilds EIP-712 with a
     // single shared MsgValue), so this returns a list of transactions to sign in order.
     async function buildMsgs() {
+      if (topUpMode) {
+        // x/feegrant has no upsert, so raising an allowance means revoking what is
+        // left and granting a fresh one. The authz grant is not touched.
+        var tp = sdk.buildGrantParts({
+          granter: injAddress, grantee: GRANTEE, contract: CONTRACT, messageKey: MSG_KEY,
+          maxFundsWei: sdk.injToWei(MAX_DEPOSIT_INJ), feeWei: sdk.injToWei(FEE_INJ),
+          expirationUnix: expiryUnix(),
+        });
+        var alT = await getAllowance(injAddress);
+        pendingGroups = [];
+        if (alT.exists) pendingGroups.push({ label: "remove the spent fee allowance", msgs: [tp.revoke] });
+        pendingGroups.push({ label: "fee allowance", msgs: [tp.feegrant] });
+        paintGroups();
+        return;
+      }
       if (cancelMode) {
         var rp = sdk.buildRevokeParts({ granter: injAddress, grantee: GRANTEE });
         var al2 = await getAllowance(injAddress);
@@ -751,6 +810,16 @@
       } catch (e) { if (e && e.message) throw e; }
     }
 
+    // Only shown when the fee allowance ran dry: there the default action is the
+    // top-up, so this is the way out for someone who would rather just stop.
+    altBtn.addEventListener("click", function () {
+      if (!account || !injAddress || !GRANTEE) return;
+      topUpMode = false; cancelMode = true;
+      altBtn.classList.add("hidden");
+      collapseDetails();          // drops any built top-up tx and repaints the button
+      setMsg("");
+    });
+
     authorizeBtn.addEventListener("click", async function () {
       if (!account || !injAddress || !GRANTEE) return;
 
@@ -760,11 +829,14 @@
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
         await buildMsgs();
         details.classList.remove("hidden");
-        authorizeBtn.textContent = cancelMode ? "SIGN TO CANCEL" : "SIGN IN WALLET";
+        authorizeBtn.textContent = cancelMode ? "SIGN TO CANCEL"
+                                 : topUpMode ? "SIGN TO TOP UP" : "SIGN IN WALLET";
         setMsg("");
         return;
       }
 
+      // capture it now: collapseDetails() below resets the mode before the message is written
+      var signedMode = topUpMode ? "topup" : cancelMode ? "cancel" : "grant";
       authorizeBtn.disabled = true;             // step 2: sign + broadcast
       try {
         await ensureInjectiveChain();
@@ -786,7 +858,9 @@
           },
         });
         msg.className = "msg ok";
-        msg.textContent = (cancelMode ? "grant cancelled — " : "authorized — ");
+        msg.textContent = signedMode === "cancel" ? "grant cancelled — "
+                        : signedMode === "topup"  ? "fee allowance topped up — "
+                        : "authorized — ";
         collapseDetails();
         res.forEach(function (r, i) {
           if (i) msg.appendChild(document.createTextNode(" · "));

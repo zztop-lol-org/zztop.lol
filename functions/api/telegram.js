@@ -2,6 +2,7 @@
 // Fast-ack (answer the callback + 200 immediately) then do the slow getFile ->
 // getxapi post inside waitUntil, so Telegram never retries and compounds races.
 // Idempotency: guard status==pending, strip buttons on first tap.
+import { classify } from "../_lib/share.js";
 
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
@@ -341,14 +342,19 @@ export async function onRequestPost(context) {
     rec.status = "posting";
     await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec));
     try {
+      // Records queued before reposting existed carry no kind, and an older deploy
+      // can still be writing them. Classify again here so what happens depends on
+      // the submission itself rather than on which version happened to store it.
+      const cls = rec.kind ? { kind: rec.kind, srcId: rec.srcId, text: rec.shareText }
+                           : classify(rec.text, !!rec.file_id);
       let res, droppedMedia = null;
-      if (rec.kind === "repost") {
+      if (cls.kind === "repost") {
         // nothing of ours to upload or write: amplify the original as it stands
-        res = await getxapiRetweet(env, rec.srcId);
-        res.url = rec.srcUrl || `https://x.com/i/web/status/${rec.srcId}`;
+        res = await getxapiRetweet(env, cls.srcId);
+        res.url = rec.srcUrl || `https://x.com/i/web/status/${cls.srcId}`;
       } else {
-        const body = rec.kind === "quote" ? rec.shareText : rec.text;
-        const quoteId = rec.kind === "quote" ? rec.srcId : null;
+        const body = cls.kind === "quote" ? cls.text : rec.text;
+        const quoteId = cls.kind === "quote" ? cls.srcId : null;
         let mediaIds;
         if (rec.file_id) {
           const bytes = await tgDownload(env, rec.file_id);
@@ -365,10 +371,11 @@ export async function onRequestPost(context) {
         }
       }
       rec.status = "posted"; rec.url = res.url; rec.retweetId = res.retweetId || null;
+      rec.kind = cls.kind; rec.srcId = cls.srcId || null;   // pin it for the report
       if (droppedMedia) rec.mediaDropped = droppedMedia;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
-      const verb = rec.kind === "repost" ? (res.already ? "🔁 already reposted" : "🔁 reposted")
-                 : rec.kind === "quote" ? "💬 quoted" : "✅ posted";
+      const verb = cls.kind === "repost" ? (res.already ? "🔁 already reposted" : "🔁 reposted")
+                 : cls.kind === "quote" ? "💬 quoted" : "✅ posted";
       const okText = verb + (res.url ? " " + res.url : " (no url returned)") +
         (droppedMedia ? "\n⚠ attachment dropped — X rejected it: " + droppedMedia : "");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });

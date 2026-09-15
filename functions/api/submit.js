@@ -22,13 +22,67 @@ function b64ToBytes(b64) {
   return u;
 }
 
+// A submission that is nothing but a link to an X post is a repost, not a new
+// tweet: approving it retweets the original instead of writing our own copy of
+// it. With words around the link there is something of the submitter's worth
+// keeping, so that becomes a quote.
+const X_STATUS = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}\/status(?:es)?|i\/web\/status)\/(\d{5,25})(?:[/?#]\S*)?$/i;
+
+function classify(text, hasMedia) {
+  const words = text.trim().split(/\s+/);
+  let srcId = null, link = null;
+  for (const w of words) {
+    const m = w.match(X_STATUS);
+    if (m) { srcId = m[1]; link = w; break; }
+  }
+  if (!srcId) return { kind: "post" };
+  // a retweet carries nothing of its own, so an attachment means they meant to post
+  if (hasMedia) return { kind: "post" };
+  const rest = words.filter((w) => w !== link).join(" ").trim();
+  // the quoted tweet renders as its own card, so the bare url would just be noise
+  return rest ? { kind: "quote", srcId, text: rest } : { kind: "repost", srcId };
+}
+
+// Best-effort look at what is being amplified. Without it the reviewer approves a
+// bare url that says nothing about its contents, which is the one case where
+// reading a submission before tapping matters most. Never blocks a submission.
+async function xDetail(env, id) {
+  try {
+    const r = await fetch(`https://api.getxapi.com/twitter/tweet/detail?id=${encodeURIComponent(id)}`,
+      { headers: { authorization: `Bearer ${env.GETXAPI_TOKEN}` } });
+    if (!r.ok) return null;
+    const d = (await r.json().catch(() => ({}))).data;
+    if (!d) return null;
+    const url = d.url || `https://x.com/i/web/status/${id}`;
+    return { url, author: (url.match(/\.com\/([A-Za-z0-9_]{1,15})\/status/) || [])[1] || null, text: d.text || "" };
+  } catch { return null; }
+}
+
 function buildCaption(text, inj, eth) {
   const warn = CTRL.test(text) ? "⚠ contains hidden/bidi characters — read carefully\n\n" : "";
   return `${warn}${text}\n\n— from ${inj}\n${eth}`;
 }
 
-async function tgSend(env, id, caption, bytes, type, ext) {
-  const kb = { inline_keyboard: [[{ text: "✅ Post", callback_data: "ok:" + id }, { text: "❌ Reject", callback_data: "no:" + id }]] };
+// Retweeting has no community_id — the endpoint takes none and X has no such
+// action — so a repost lands on the main timeline while an ordinary post goes to
+// the community. Say that on the card rather than let it surprise someone later.
+function buildShareCaption(cls, meta, inj, eth, handle) {
+  const own = handle && meta && meta.author && meta.author.toLowerCase() === String(handle).toLowerCase();
+  const lines = [cls.kind === "repost" ? "🔁 REPOST → main timeline, not the community" : "💬 QUOTE"];
+  if (own) lines.push("⚠ this is our own post");
+  if (meta) lines.push("", `@${meta.author || "?"}: ${meta.text}`, meta.url);
+  else lines.push("", "⚠ could not read that tweet — deleted, private, or a bad id",
+                  `https://x.com/i/web/status/${cls.srcId}`);
+  if (cls.kind === "quote") {
+    if (CTRL.test(cls.text)) lines.push("", "⚠ our words contain hidden/bidi characters — read carefully");
+    lines.push("", `our words: ${cls.text}`);
+  }
+  lines.push("", `— from ${inj}`, eth);
+  return lines.join("\n");
+}
+
+async function tgSend(env, id, caption, bytes, type, ext, label) {
+  const kb = { inline_keyboard: [[{ text: label || "✅ Post", callback_data: "ok:" + id }, { text: "❌ Reject", callback_data: "no:" + id }]] };
   const base = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
   if (bytes) {
     const fd = new FormData();
@@ -100,12 +154,21 @@ export async function onRequestPost({ request, env }) {
     return json({ error: `you need at least ${env.ZZ_MIN_BALANCE} ZZ to post` }, 403);
 
   // 7) push to Telegram + store pending
+  const cls = classify(text, !!bytes);
+  const meta = cls.srcId ? await xDetail(env, cls.srcId) : null;
+  const caption = cls.kind === "post"
+    ? buildCaption(text, inj, recovered)
+    : buildShareCaption(cls, meta, inj, recovered, env.GETXAPI_HANDLE);
+  const label = cls.kind === "repost" ? "🔁 Repost" : cls.kind === "quote" ? "💬 Quote" : "✅ Post";
+
   const id = crypto.randomUUID();
   let fileId;
-  try { fileId = await tgSend(env, id, buildCaption(text, inj, recovered), bytes, mtype, ext); }
+  try { fileId = await tgSend(env, id, caption, bytes, mtype, ext, label); }
   catch { return json({ error: "could not queue for review, try again" }, 502); }
 
-  const rec = { id, text, file_id: fileId || null, mediaType: mtype, inj, eth: recovered, status: "pending", ts: now };
+  const rec = { id, text, file_id: fileId || null, mediaType: mtype, inj, eth: recovered, status: "pending", ts: now,
+                kind: cls.kind, srcId: cls.srcId || null, srcUrl: (meta && meta.url) || null,
+                shareText: cls.kind === "quote" ? cls.text : null };
   await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 60 * 60 * 24 * 7 });
   await env.TWEETS.put(rlKey, String(used + 1), { expirationTtl: 3700 });
 

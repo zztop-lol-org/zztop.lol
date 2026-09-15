@@ -55,10 +55,14 @@ async function sendTweetReport(env, chatId, all) {
   }
   rows.sort((a, b) => a.ts - b.ts);
 
+  // the url list keeps its old shape; the counts beside it separate what someone
+  // wrote from what they only amplified, which are not worth the same
   const byAddr = new Map();
   for (const r of rows) {
-    if (!byAddr.has(r.inj)) byAddr.set(r.inj, []);
-    byAddr.get(r.inj).push(r.url);
+    if (!byAddr.has(r.inj)) byAddr.set(r.inj, { urls: [], post: 0, quote: 0, repost: 0 });
+    const e = byAddr.get(r.inj);
+    e.urls.push(r.url);
+    e[r.kind === "repost" || r.kind === "quote" ? r.kind : "post"]++;
   }
 
   const stamp = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC";
@@ -67,7 +71,8 @@ async function sendTweetReport(env, chatId, all) {
   if (!rows.length) {
     await tg(env, "sendMessage", { chat_id: chatId, text: `no new posted tweets ${window}` });
   } else {
-    const csv = ["addr,tweets", ...[...byAddr].map(([a, urls]) => `${a},${csvCell(urls.join(" "))}`)].join("\n");
+    const csv = ["addr,tweets,posts,quotes,reposts",
+      ...[...byAddr].map(([a, e]) => `${a},${csvCell(e.urls.join(" "))},${e.post},${e.quote},${e.repost}`)].join("\n");
     const name = `zztop-tweets-${new Date(now * 1000).toISOString().slice(0, 10)}.csv`;
     await tgSendDoc(env, chatId, name, csv, `${byAddr.size} address(es), ${rows.length} tweet(s) — ${window}`);
   }
@@ -124,13 +129,14 @@ async function getxapiUpload(env, mediaData, mediaType) {
 // The post itself is still fine, so we retry without the attachment.
 const MEDIA_REJECTED = /duration too short|media type unrecognized|invalid media|unsupported media|mediaid/i;
 
-async function getxapiCreate(env, text, mediaIds) {
+async function getxapiCreate(env, text, mediaIds, quoteId) {
   const payload = {
     auth_token: env.GETXAPI_AUTH_TOKEN,
     ct0: env.GETXAPI_CT0,
     twid: env.GETXAPI_TWID,
     text,
   };
+  if (quoteId) payload.quote_tweet_id = quoteId;
   if (mediaIds && mediaIds.length) payload.media_ids = mediaIds;
   if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
   if (env.GETXAPI_COMMUNITY_ID) payload.community_id = env.GETXAPI_COMMUNITY_ID;
@@ -153,6 +159,38 @@ async function getxapiCreate(env, text, mediaIds) {
   const id = j.id || j.tweet_id || (j.data && j.data.id) || null;
   const url = id && env.GETXAPI_HANDLE ? `https://x.com/${env.GETXAPI_HANDLE}/status/${id}` : null;
   return { id, url };
+}
+
+// Retweeting the original instead of writing our own copy of it. There is no
+// community_id here — the endpoint takes none and X has no such action — so a
+// repost lands on the main timeline even while ordinary posts go to a community.
+const ALREADY_RT = /already retweeted|already reposted|duplicate/i;
+
+async function getxapiRetweet(env, tweetId) {
+  const payload = { auth_token: env.GETXAPI_AUTH_TOKEN, ct0: env.GETXAPI_CT0, twid: env.GETXAPI_TWID, tweet_id: tweetId };
+  if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
+  let r;
+  try {
+    r = await fetch("https://api.getxapi.com/twitter/tweet/retweet", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.GETXAPI_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr) { const e = new Error("network error reaching getxapi"); e.retryable = true; throw e; }
+  const j = await r.json().catch(() => ({}));
+  // checked before the 502: an already-standing retweet is the state we wanted,
+  // and X declines to confirm the action a second time
+  if (ALREADY_RT.test(String(j.error || j.msg || ""))) return { id: tweetId, retweetId: null, already: true };
+  if (r.status === 502) { const e = new Error("getxapi 502 — outcome unconfirmed"); e.unconfirmed = true; throw e; }
+  if (!r.ok) {
+    const e = new Error(`getxapi ${r.status}: ${j.error || "repost failed"}`);
+    if (r.status === 401) e.authDead = true;
+    else if (r.status === 400) e.permanent = true;   // a bad or missing id: retrying changes nothing
+    else e.retryable = true;
+    throw e;
+  }
+  const d = j.data || {};
+  return { id: d.tweetId || tweetId, retweetId: d.retweetId || null };
 }
 
 
@@ -303,25 +341,35 @@ export async function onRequestPost(context) {
     rec.status = "posting";
     await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec));
     try {
-      let mediaIds;
-      if (rec.file_id) {
-        const bytes = await tgDownload(env, rec.file_id);
-        const mtype = sniffMime(bytes) || rec.mediaType; // real bytes win (Telegram may have transcoded)
-        const mid = await getxapiUpload(env, bytesToB64(bytes), mtype);
-        mediaIds = [mid];
-      }
       let res, droppedMedia = null;
-      try {
-        res = await getxapiCreate(env, rec.text, mediaIds);
-      } catch (e) {
-        if (!mediaIds || !MEDIA_REJECTED.test(e.message || "")) throw e;
-        droppedMedia = e.message;                       // post the words, lose the attachment
-        res = await getxapiCreate(env, rec.text, undefined);
+      if (rec.kind === "repost") {
+        // nothing of ours to upload or write: amplify the original as it stands
+        res = await getxapiRetweet(env, rec.srcId);
+        res.url = rec.srcUrl || `https://x.com/i/web/status/${rec.srcId}`;
+      } else {
+        const body = rec.kind === "quote" ? rec.shareText : rec.text;
+        const quoteId = rec.kind === "quote" ? rec.srcId : null;
+        let mediaIds;
+        if (rec.file_id) {
+          const bytes = await tgDownload(env, rec.file_id);
+          const mtype = sniffMime(bytes) || rec.mediaType; // real bytes win (Telegram may have transcoded)
+          const mid = await getxapiUpload(env, bytesToB64(bytes), mtype);
+          mediaIds = [mid];
+        }
+        try {
+          res = await getxapiCreate(env, body, mediaIds, quoteId);
+        } catch (e) {
+          if (!mediaIds || !MEDIA_REJECTED.test(e.message || "")) throw e;
+          droppedMedia = e.message;                       // post the words, lose the attachment
+          res = await getxapiCreate(env, body, undefined, quoteId);
+        }
       }
-      rec.status = "posted"; rec.url = res.url;
+      rec.status = "posted"; rec.url = res.url; rec.retweetId = res.retweetId || null;
       if (droppedMedia) rec.mediaDropped = droppedMedia;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
-      const okText = "✅ posted" + (res.url ? " " + res.url : " (no url returned)") +
+      const verb = rec.kind === "repost" ? (res.already ? "🔁 already reposted" : "🔁 reposted")
+                 : rec.kind === "quote" ? "💬 quoted" : "✅ posted";
+      const okText = verb + (res.url ? " " + res.url : " (no url returned)") +
         (droppedMedia ? "\n⚠ attachment dropped — X rejected it: " + droppedMedia : "");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
       // also send the confirmation to the community group, with the submitter as an injscan link
@@ -335,6 +383,11 @@ export async function onRequestPost(context) {
         rec.status = "unconfirmed";
         await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 });
         await note(env, `⚠ unconfirmed (getxapi 502): the tweet MAY have posted. Check @${env.GETXAPI_HANDLE || "the account"} on X before retrying.`);
+      } else if (e.permanent) {
+        // a bad id or a malformed request: the same tap would fail the same way
+        rec.status = "failed";
+        await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 });
+        await note(env, `⚠ ${e.message}\n\nretrying will not help — the tweet may be deleted or the link wrong.`);
       } else {
         // retryable (429/throttle/network) or auth-dead: reset to pending, offer Retry / Cancel
         rec.status = "pending";

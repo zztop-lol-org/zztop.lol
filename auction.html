@@ -225,6 +225,9 @@
     var CONTRACT        = "inj10n78w79xhxmytnuhjcck633nj4e7hrqaglgnfz"; // the buyback "Auction" contract
     var GRANTEE         = "inj1zzzzzzzzzzd6alqdkdk8qtzzqksa59v0hr5xk6"; // zztop bot wallet
     var MSG_KEY         = "join_pool";
+    // Fallbacks only. The contract publishes a per-wallet ceiling for every round
+    // and it does change between them — round 13 halved it from 100 to 50 — so
+    // loadRound() overwrites both of these from wallet_cap as soon as a round exists.
     var DEFAULT_DEPOSIT_INJ = "100";     // what a fresh authorization starts at
     var MAX_DEPOSIT_INJ = DEFAULT_DEPOSIT_INJ;  // the user can change it with the pen
     var HARD_CAP_INJ    = 100;           // per-wallet ceiling; anything higher is clamped
@@ -377,8 +380,26 @@
         // remember what the expiry calculation needs, then repaint the terms
         roundOpensAt = Number(d.start_date) || 0;
         try { roundRemaining = BigInt(d.round_cap) - BigInt(d.total_deposit); } catch (e) {}
+        // Per-wallet ceiling, straight from the round. Authorizing above it buys
+        // nothing; below it leaves allocation on the table.
+        try {
+          var wc = Number(BigInt(d.wallet_cap) / 10n ** 12n) / 1e6;
+          if (wc > 0) {
+            HARD_CAP_INJ = wc;
+            if (Number(DEFAULT_DEPOSIT_INJ) > wc) DEFAULT_DEPOSIT_INJ = String(wc);
+            // never rewrite an amount that is showing an existing grant
+            if (!cancelMode && !topUpMode && Number(MAX_DEPOSIT_INJ) > wc) MAX_DEPOSIT_INJ = String(wc);
+            // loadRound() is kicked off above where capInput is assigned; it only
+            // survives today because the fetch yields first. Guard it regardless.
+            if (capInput) capInput.max = String(wc);
+            renderTerms();
+          }
+        } catch (e) {}
         var cfg = await smartQuery(CONTRACT, { config: {} });
-        try { minUserWei = BigInt(cfg.data.min_user_allocation); } catch (e) {}
+        try {
+          minUserWei = BigInt(cfg.data.min_user_allocation);
+          if (capInput) capInput.min = String(Number(minUserWei / 10n ** 12n) / 1e6);
+        } catch (e) {}
         var when = new Date(Number(d.start_date) * 1000);
         var head = "<b>round " + d.id + "</b> · " + MON[when.getUTCMonth()] + " " + when.getUTCFullYear() + " · ";
         if (now < Number(d.start_date))      el.innerHTML = head + "deposits open " + stamp(Number(d.start_date));

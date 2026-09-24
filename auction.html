@@ -488,11 +488,12 @@
       var rp = document.getElementById("resultpanel"), box = document.getElementById("resultBody");
       rp.classList.remove("hidden");
       var reopen = stampDay(firstOfNextMonth(roundEndsAt));
+      var closed = !roundEndsAt || Math.floor(Date.now() / 1000) >= roundEndsAt;
       var small = function (t) { var e = document.createElement("small"); e.textContent = t; box.appendChild(e); };
 
       if (!injAddress) {
         box.className = "result";
-        box.textContent = "round " + rid + " is closed.";
+        box.textContent = "round " + rid + (closed ? " is closed." : " is already under way.");
         small("connect your wallet to see how it went · authorizations reopen " + reopen);
         return;
       }
@@ -517,7 +518,9 @@
       box.className = "result miss";
       box.textContent = sub
         ? "you authorized, but the bot could not get you into round " + rid + "."
-        : "round " + rid + " is closed and you were not in it.";
+        : closed
+          ? "round " + rid + " is closed and you were not in it."
+          : "round " + rid + " is already under way and this wallet is not in it.";
       small((listed === false
               ? "this wallet was not on the eligibility list for that round, which is the usual reason. "
               : listed === true
@@ -717,7 +720,22 @@
       setMsg(GRANTEE ? "" : "the zztop bot wallet is not published yet — check back before the next round opens");
     }
 
+    // Every banner on this page is about one specific wallet. Switching wallets has
+    // to wipe all of them: the joined path returns early, so whatever the last wallet
+    // left behind would otherwise still be sitting there under the new address.
+    function clearWalletState() {
+      var rb = document.getElementById("resultBody");
+      rb.textContent = ""; rb.className = "result";
+      document.getElementById("resultpanel").classList.add("hidden");
+      document.getElementById("subbed").classList.add("hidden");
+      document.getElementById("notlisted").classList.add("hidden");
+      altBtn.classList.add("hidden");
+      cancelMode = false; topUpMode = false;
+      setMsg("");
+    }
+
     function showConnected() {
+      clearWalletState();
       injAddress = getInjectiveAddress(account);
       who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
       connectBtn.classList.add("hidden");
@@ -742,7 +760,10 @@
         showEligibility();
       };
       joinResult(currentRoundId, injAddress).then(function (r) {
+        var now = Math.floor(Date.now() / 1000);
+        // in the round, or too late to be: either way the button is the wrong answer
         if (r && r.depositWei > 0n) showResults(currentRoundId);
+        else if (roundOpensAt && now >= roundOpensAt) showResults(currentRoundId);
         else askNormally();
       }, askNormally);
     }
@@ -757,7 +778,7 @@
     }
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
-      document.getElementById("notlisted").classList.add("hidden");
+      clearWalletState();
       collapseDetails();
       who.textContent = "";
       disconnectBtn.classList.add("hidden");

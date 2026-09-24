@@ -308,8 +308,9 @@
     // Once deposits shut there is nothing left to authorize for, so the page stops
     // asking and reports instead. Authorizations reopen on the 1st, by which point
     // every grant has expired and has to be signed again anyway.
-    var closedRoundId = 0;    // the round whose result we are showing
-    var roundEndsAt   = 0;
+    var closedRoundId  = 0;   // set once deposits shut
+    var currentRoundId = 0;   // the round on the chain right now, open or not
+    var roundEndsAt    = 0;
     var resultsMode   = false;
     var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -415,6 +416,8 @@
           minUserWei = BigInt(cfg.data.min_user_allocation);
           if (capInput) capInput.min = String(Number(minUserWei / 10n ** 12n) / 1e6);
         } catch (e) {}
+        currentRoundId = Number(d.id);
+        roundEndsAt = Number(d.end_date);
         var when = new Date(Number(d.start_date) * 1000);
         var head = "<b>round " + d.id + "</b> · " + MON[when.getUTCMonth()] + " " + when.getUTCFullYear() + " · ";
         if (now < Number(d.start_date))      el.innerHTML = head + "deposits open " + stamp(Number(d.start_date));
@@ -426,7 +429,6 @@
           // were signed for this round have expired and cannot be reused.
           if (now < firstOfNextMonth(Number(d.end_date))) {
             closedRoundId = Number(d.id);
-            roundEndsAt = Number(d.end_date);
             resultsMode = true;
             showResults();
           }
@@ -479,8 +481,9 @@
     // Deposits are shut, so the page reports instead of asking. Three outcomes:
     // the bot got you in, it did not, or you never authorized — and for the last
     // two the eligibility list is usually the reason, so say which.
-    async function showResults() {
-      if (!resultsMode) return;
+    async function showResults(roundIdOverride) {
+      var rid = roundIdOverride || closedRoundId;
+      if (!rid) return;
       panel.classList.add("hidden");              // nothing left to authorize for
       var rp = document.getElementById("resultpanel"), box = document.getElementById("resultBody");
       rp.classList.remove("hidden");
@@ -489,19 +492,19 @@
 
       if (!injAddress) {
         box.className = "result";
-        box.textContent = "round " + closedRoundId + " is closed.";
+        box.textContent = "round " + rid + " is closed.";
         small("connect your wallet to see how it went · authorizations reopen " + reopen);
         return;
       }
 
-      var res = await joinResult(closedRoundId, injAddress);
+      var res = await joinResult(rid, injAddress);
       if (res && res.depositWei > 0n) {
         box.className = "result";
         box.textContent = "";
         var b = document.createElement("span");
         b.className = "big"; b.textContent = weiToInj(res.depositWei.toString()) + " INJ";
         box.appendChild(b);
-        box.appendChild(document.createTextNode("zzbot joined round " + closedRoundId + " for you."));
+        box.appendChild(document.createTextNode("zzbot joined round " + rid + " for you."));
         small(res.basket.length
           ? "your share of the basket: " + res.basket.length + " assets, already yours to withdraw"
           : "the basket lands when the auction settles · authorizations reopen " + reopen);
@@ -513,8 +516,8 @@
       var listed = await wasListed(injAddress);
       box.className = "result miss";
       box.textContent = sub
-        ? "you authorized, but the bot could not get you into round " + closedRoundId + "."
-        : "round " + closedRoundId + " is closed and you were not in it.";
+        ? "you authorized, but the bot could not get you into round " + rid + "."
+        : "round " + rid + " is closed and you were not in it.";
       small((listed === false
               ? "this wallet was not on the eligibility list for that round, which is the usual reason. "
               : listed === true
@@ -583,6 +586,10 @@
         var r = await fetch("/api/whitelist?addr=" + encodeURIComponent(injAddress), { cache: "no-store" });
         var j = await r.json();
         if (!r.ok || j.listed !== false) return;      // eligible, or we could not tell — say nothing
+        // The list only holds wallets that have NOT joined, so a depositor reads back
+        // as unlisted. Never warn someone the bot already got in.
+        var jr = await joinResult(currentRoundId, injAddress);
+        if (jr && jr.depositWei > 0n) return;
         // the list churns ~5% a round, so this is about the PREVIOUS round, not a verdict
         box.textContent = "this wallet is not on the previous round eligibility list";
         var sm = document.createElement("small");
@@ -724,9 +731,20 @@
       // is already subscribed, leaving the banner and the button disagreeing.
       if (resultsMode) { showResults(); return; }   // closed: report, do not ask
       authorizeBtn.disabled = true;
-      showSubscriptionState().then(function () { authorizeBtn.disabled = !GRANTEE; },
-                                   function () { authorizeBtn.disabled = !GRANTEE; });
-      showEligibility();
+      // Already in this round? Then there is nothing left to authorize for, and the
+      // eligibility warning would be actively wrong: joining is precisely what takes a
+      // wallet off get_unused_whitelisted_addresses, so the list reports everyone the
+      // bot succeeded for as ineligible. Check the deposit before asking the list.
+      var askNormally = function () {
+        authorizeBtn.disabled = !GRANTEE;
+        showSubscriptionState().then(function () { authorizeBtn.disabled = !GRANTEE; },
+                                     function () { authorizeBtn.disabled = !GRANTEE; });
+        showEligibility();
+      };
+      joinResult(currentRoundId, injAddress).then(function (r) {
+        if (r && r.depositWei > 0n) showResults(currentRoundId);
+        else askNormally();
+      }, askNormally);
     }
     function collapseDetails() {
       pendingGroups = null;

@@ -119,6 +119,11 @@
     .altaction { display: block; margin: .6rem auto 0; background: none; border: 0; padding: 0; font: inherit; font-size: .8rem; color: var(--dim); text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
     .altaction:hover { color: var(--green); }
     .subbed.short { color: #ffcf8f; border-left-color: #ffcf8f; }
+    .result { font-weight: 300; font-size: .95rem; line-height: 1.55; color: var(--green); }
+    .result b { font-weight: 800; }
+    .result .big { display: block; font-weight: 800; font-size: 1.4rem; letter-spacing: .02em; margin: .1em 0 .35em; }
+    .result small { display: block; color: var(--dim); font-size: .8rem; margin-top: .5em; line-height: 1.5; }
+    .result.miss { color: #ffcf8f; }
     .lede p { margin-bottom: .7rem; }
     .lede .lede-dim { color: var(--dim); }
     .details { display: flex; flex-direction: column; gap: .9rem; }
@@ -205,6 +210,10 @@
         </div>
         <pre class="raw hidden" id="raw"></pre>
       </div>
+    </section>
+
+    <section class="panel hidden" id="resultpanel">
+      <p class="result" id="resultBody"></p>
     </section>
 
     <p class="msg" id="msg"></p>
@@ -296,6 +305,12 @@
     var pendingGroups = null; // one entry per transaction; built on click 1, signed on click 2
     var cancelMode = false;   // true once a live grant is found: the button undoes it
     var topUpMode  = false;   // authorized, but the fee allowance can no longer pay for a call
+    // Once deposits shut there is nothing left to authorize for, so the page stops
+    // asking and reports instead. Authorizations reopen on the 1st, by which point
+    // every grant has expired and has to be signed again anyway.
+    var closedRoundId = 0;    // the round whose result we are showing
+    var roundEndsAt   = 0;
+    var resultsMode   = false;
     var sdk = null;           // lazily imported on first authorize
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var STORE = "zz_wallet";
@@ -404,7 +419,18 @@
         var head = "<b>round " + d.id + "</b> · " + MON[when.getUTCMonth()] + " " + when.getUTCFullYear() + " · ";
         if (now < Number(d.start_date))      el.innerHTML = head + "deposits open " + stamp(Number(d.start_date));
         else if (now < Number(d.end_date))   el.innerHTML = head + "<b>open now</b> · closes " + stamp(Number(d.end_date));
-        else                                 el.innerHTML = head + "closed " + stamp(Number(d.end_date));
+        else {
+          el.innerHTML = head + "closed " + stamp(Number(d.end_date));
+          // Deposits are shut. Report the outcome until authorizations reopen on the
+          // 1st; after that the page goes back to asking, because the grants that
+          // were signed for this round have expired and cannot be reused.
+          if (now < firstOfNextMonth(Number(d.end_date))) {
+            closedRoundId = Number(d.id);
+            roundEndsAt = Number(d.end_date);
+            resultsMode = true;
+            showResults();
+          }
+        }
       } else {
         roundOpensAt = 0; roundRemaining = null;   // nothing to reach in this cycle yet
         // The contract round does not exist yet, so there is no deposit window to show.
@@ -416,6 +442,86 @@
       }
       if (injAddress) renderTerms();     // the expiry depends on all of the above
     }
+    function stampDay(unix) {
+      var t = new Date(unix * 1000);
+      return t.getUTCDate() + " " + MON[t.getUTCMonth()];
+    }
+
+    // 00:00 UTC on the 1st of the month after the given moment.
+    function firstOfNextMonth(unix) {
+      var t = new Date(unix * 1000);
+      return Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 1) / 1000;
+    }
+
+    // What the bot actually did for this wallet, straight from the contract.
+    // A wallet that never joined is not an error here: the contract answers
+    // "User ... not found in round N", which is simply the no branch.
+    async function joinResult(roundId, inj) {
+      var r = await smartQuery(CONTRACT, { get_user_round_info: { round_id: roundId, user_addr: inj } });
+      var d = r && r.data;
+      if (!d) return null;
+      var dep = 0n;
+      try { dep = BigInt(d.deposit); } catch (e) {}
+      return { depositWei: dep, withdrawn: !!d.has_withdrawn, basket: d.earn_basket || [] };
+    }
+
+    // Joining removes a wallet from get_unused_whitelisted_addresses, so a wallet
+    // that got in reads as "not listed". Anyone who joined was obviously eligible,
+    // so only ask about the ones who did not.
+    async function wasListed(inj) {
+      try {
+        var r = await fetch("/api/whitelist?addr=" + encodeURIComponent(inj), { cache: "no-store" });
+        var j = await r.json();
+        return r.ok && typeof j.listed === "boolean" ? j.listed : null;
+      } catch (e) { return null; }
+    }
+
+    // Deposits are shut, so the page reports instead of asking. Three outcomes:
+    // the bot got you in, it did not, or you never authorized — and for the last
+    // two the eligibility list is usually the reason, so say which.
+    async function showResults() {
+      if (!resultsMode) return;
+      panel.classList.add("hidden");              // nothing left to authorize for
+      var rp = document.getElementById("resultpanel"), box = document.getElementById("resultBody");
+      rp.classList.remove("hidden");
+      var reopen = stampDay(firstOfNextMonth(roundEndsAt));
+      var small = function (t) { var e = document.createElement("small"); e.textContent = t; box.appendChild(e); };
+
+      if (!injAddress) {
+        box.className = "result";
+        box.textContent = "round " + closedRoundId + " is closed.";
+        small("connect your wallet to see how it went · authorizations reopen " + reopen);
+        return;
+      }
+
+      var res = await joinResult(closedRoundId, injAddress);
+      if (res && res.depositWei > 0n) {
+        box.className = "result";
+        box.textContent = "";
+        var b = document.createElement("span");
+        b.className = "big"; b.textContent = weiToInj(res.depositWei.toString()) + " INJ";
+        box.appendChild(b);
+        box.appendChild(document.createTextNode("zzbot joined round " + closedRoundId + " for you."));
+        small(res.basket.length
+          ? "your share of the basket: " + res.basket.length + " assets, already yours to withdraw"
+          : "the basket lands when the auction settles · authorizations reopen " + reopen);
+        return;
+      }
+
+      // no deposit. was it for want of trying, or was the wallet never eligible?
+      var sub = await checkSubscription(injAddress);
+      var listed = await wasListed(injAddress);
+      box.className = "result miss";
+      box.textContent = sub
+        ? "you authorized, but the bot could not get you into round " + closedRoundId + "."
+        : "round " + closedRoundId + " is closed and you were not in it.";
+      small((listed === false
+              ? "this wallet was not on the eligibility list for that round, which is the usual reason. "
+              : listed === true
+                ? "this wallet was on the eligibility list, so the round most likely filled first. "
+                : "") + "authorizations reopen " + reopen + ".");
+    }
+
     loadRound();
 
     // Does a fee allowance already exist for this wallet? The chain answers a missing one
@@ -453,7 +559,12 @@
         var a = list[i].authorization || {};
         var t = a["@type"] || "";
         var exp = list[i].expiration ? Date.parse(list[i].expiration) / 1000 : Infinity;
-        if (/ContractExecutionAuthorization/.test(t) && exp > now) {
+        // A grant signed for the round that just ended is still technically alive
+        // during its buffer, but it is spent: the table starts clean every auction.
+        // Anything that expires before the current auction closes belongs to the last
+        // one, so it must not read as "you are subscribed" for the next.
+        var forThisAuction = !auctionEndsAt || exp > auctionEndsAt;
+        if (/ContractExecutionAuthorization/.test(t) && exp > now && forThisAuction) {
           var amt = null;
           try { amt = a.grants[0].limit.amounts[0].amount; } catch (e) {}
           return { expiration: list[i].expiration, amountWei: amt };
@@ -611,6 +722,7 @@
       // Nothing is clickable until the grant lookup returns: a click before it lands
       // takes the default AUTHORIZE path and builds a fresh grant for a wallet that
       // is already subscribed, leaving the banner and the button disagreeing.
+      if (resultsMode) { showResults(); return; }   // closed: report, do not ask
       authorizeBtn.disabled = true;
       showSubscriptionState().then(function () { authorizeBtn.disabled = !GRANTEE; },
                                    function () { authorizeBtn.disabled = !GRANTEE; });

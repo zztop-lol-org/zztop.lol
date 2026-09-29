@@ -3,7 +3,7 @@
 // tweet to the admin's Telegram for approval and store it pending in KV.
 // Best-effort auth per product decision (2026-09-04): signed message is the fixed
 // "zzzz confirming it's you\n<unix_ts>"; freshness is the only replay guard.
-import { recoverEthAddress, ethToInj, zzBalanceRaw, meetsThreshold } from "../_lib/crypto.js";
+import { recoverEthAddress, ethToInj, zzBalanceRaw, zzStakedRaw, meetsThreshold, ZZ_STAKING, INJ_EVM_RPC } from "../_lib/crypto.js";
 import { classify } from "../_lib/share.js";
 
 const MSG_PREFIX = "zzzz confirming it's you";
@@ -126,12 +126,20 @@ export async function onRequestPost({ request, env }) {
   const used = parseInt((await env.TWEETS.get(rlKey)) || "0", 10);
   if (used >= RATE_PER_HOUR) return json({ error: "rate limit: 3 tweets/hour per wallet" }, 429);
 
-  // 6) ZZ balance — fail CLOSED on any RPC problem
-  let raw;
-  try { raw = await zzBalanceRaw(env.ZZ_LCD_URL, inj, env.ZZ_DENOM); }
-  catch { return json({ error: "balance check unavailable, try again" }, 503); }
-  if (!meetsThreshold(raw, env.ZZ_MIN_BALANCE, Number(env.ZZ_DECIMALS)))
-    return json({ error: `you need at least ${env.ZZ_MIN_BALANCE} ZZ to post` }, 403);
+  // 6) ZZ held + ZZ staked in ZZStaking (a stake leaves the wallet but is still theirs).
+  //    Fail CLOSED: a wallet read that fails is a 503; a stake read that fails counts
+  //    as nothing staked only if the wallet alone already qualifies — otherwise 503 too,
+  //    never a 403 for a staker we simply could not see.
+  const [held, staked] = await Promise.allSettled([
+    zzBalanceRaw(env.ZZ_LCD_URL, inj, env.ZZ_DENOM),
+    zzStakedRaw(env.ZZ_EVM_RPC || INJ_EVM_RPC, env.ZZ_STAKING || ZZ_STAKING, recovered),
+  ]);
+  if (held.status !== "fulfilled") return json({ error: "balance check unavailable, try again" }, 503);
+  const total = held.value + (staked.status === "fulfilled" ? staked.value : 0n);
+  if (!meetsThreshold(total, env.ZZ_MIN_BALANCE, Number(env.ZZ_DECIMALS))) {
+    if (staked.status !== "fulfilled") return json({ error: "balance check unavailable, try again" }, 503);
+    return json({ error: `you need at least ${env.ZZ_MIN_BALANCE} ZZ, held or staked, to post` }, 403);
+  }
 
   // 7) push to Telegram + store pending
   const cls = classify(text, !!bytes);

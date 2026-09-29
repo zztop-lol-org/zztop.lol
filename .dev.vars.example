@@ -7,6 +7,9 @@ ZZ_LCD_URL=https://lcd.injective.network
 ZZ_DENOM=factory/inj13j2rpnlwl30c02d4pzukykwfeyyhelvry9cqte/shroom_157_99c09d972f9c1f79
 ZZ_DECIMALS=18
 ZZ_MIN_BALANCE=            # N — how many ZZ required to post (integer, e.g. 100000)
+# optional: staked ZZ counts toward the minimum (defaults: the mainnet contract and RPC)
+# ZZ_STAKING=0xfba18A6f1234c014DDc6DA32163843B70D1dBF30
+# ZZ_EVM_RPC=https://sentry.evm-rpc.injective.network/
 
 # --- Telegram approval bot ---
 TELEGRAM_BOT_TOKEN=        # from BotFather

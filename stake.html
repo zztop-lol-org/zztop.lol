@@ -191,7 +191,7 @@
     <h1 class="title">ZZSTAKE</h1>
     <div class="lede">
       <p>lock zztop. earn zztop, inj, usdt and usdc — every second, claim whenever.</p>
-      <p class="dim">1, 3, 6 or 12 months. the longer the lock, the bigger your share. no early exit.</p>
+      <p class="dim">1, 3, 6 or 12 months. the longer the lock, the bigger your share.</p>
     </div>
 
     <section class="card" id="stats" aria-label="staking totals">
@@ -255,7 +255,7 @@
       <p class="note">rewards split by weight: amount × multiplier. once a lock ends, withdraw whenever — until then it keeps earning, and anyone can drop an ended lock back to 1×.</p>
     </section>
 
-    <p class="foot">contract <a id="contractLink" target="_blank" rel="noopener noreferrer"></a> on injective evm · verified source · fork of curve's multirewards</p>
+    <p class="foot">contract <a id="contractLink" target="_blank" rel="noopener noreferrer"></a> on injective evm · verified source</p>
   </main>
 
   <footer class="walletbar" id="walletbar">
@@ -536,7 +536,7 @@
         pd.classList.toggle("hidden", !live.length);
       } else { $("share").textContent = "—"; pd.classList.add("hidden"); }
       $("lockWarn").textContent = amt && amt > 0n
-        ? "locked until " + dateStr(unlock) + ". there is no early exit — not even for the team."
+        ? "locked until " + dateStr(unlock) + "."
         : "";
 
       var label, dis = false, go = null;

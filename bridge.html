@@ -94,6 +94,23 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237CFFB0' stroke-width='1.6'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right center; background-size: .7em; }
     select.val option { background: #0a0a0f; color: var(--green); }
+    /* token and network logos: 32×32 SVG badges in /icons/tokens, drawn at text size */
+    .withico { display: flex; align-items: center; gap: .45em; min-width: 0; }
+    .withico > span, .withico > select { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .withico > select { flex: 1; }
+    .ico { width: 1.25em; height: 1.25em; flex: none; display: block; }
+    .amrow .ico { width: 1.15rem; height: 1.15rem; }
+    /* phones: the logo costs width, so "Ethereum" would clip — take it back from the padding */
+    @media (max-width: 420px) {
+      .box { padding: .65rem .6rem; }
+      .withico { gap: .35em; }
+      .box .val { font-size: .98rem; }
+    }
+    @media (max-width: 360px) {
+      .card { padding: .8rem; }
+      .pair { gap: .45rem; }
+      .box .val { font-size: .9rem; }
+    }
     .swapwrap { display: flex; justify-content: center; margin: -.45rem 0; position: relative; z-index: 1; }
     .swap { width: 2.3rem; height: 2.3rem; border-radius: 50%; border: 1px solid rgba(124,255,176,.4); background: #0a0a0f; color: var(--green); cursor: pointer; display: grid; place-items: center; transition: transform .25s, box-shadow .2s, border-color .2s; }
     .swap:hover { border-color: var(--green); box-shadow: 0 0 .9em rgba(124,255,176,.35); }
@@ -209,14 +226,14 @@
       <div class="pair">
         <div class="box">
           <label class="lbl" for="token">token</label>
-          <select class="val" id="token" aria-label="token">
+          <div class="val withico"><img class="ico" id="tokenIco" src="/icons/tokens/inj.svg" alt="" width="32" height="32" /><select class="val" id="token" aria-label="token">
             <option value="inj">INJ</option>
             <option value="eth">ETH</option>
             <option value="usdt">USDT</option>
             <option value="usdc">USDC</option>
-          </select>
+          </select></div>
         </div>
-        <div class="box"><span class="lbl">from</span><span class="val" id="fromNet">Ethereum</span></div>
+        <div class="box"><span class="lbl">from</span><span class="val withico"><img class="ico" id="fromIco" src="/icons/tokens/eth.svg" alt="" width="32" height="32" /><span id="fromNet">Ethereum</span></span></div>
       </div>
 
       <div class="swapwrap">
@@ -226,8 +243,8 @@
       </div>
 
       <div class="pair">
-        <div class="box"><span class="lbl">token</span><span class="val" id="toToken">INJ</span></div>
-        <div class="box"><span class="lbl">to</span><span class="val" id="toNet">Injective</span></div>
+        <div class="box"><span class="lbl">token</span><span class="val withico"><img class="ico" id="toTokenIco" src="/icons/tokens/inj.svg" alt="" width="32" height="32" /><span id="toToken">INJ</span></span></div>
+        <div class="box"><span class="lbl">to</span><span class="val withico"><img class="ico" id="toIco" src="/icons/tokens/inj.svg" alt="" width="32" height="32" /><span id="toNet">Injective</span></span></div>
       </div>
 
       <div class="amount">
@@ -237,7 +254,7 @@
         </div>
         <div class="amrow">
           <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="amount" />
-          <span class="sym" id="amSym">INJ</span>
+          <img class="ico" id="amIco" src="/icons/tokens/inj.svg" alt="" width="32" height="32" /><span class="sym" id="amSym">INJ</span>
         </div>
         <div class="chips">
           <button type="button" data-pct="25">25%</button>
@@ -472,6 +489,7 @@
     }
 
     // ---- derived numbers ------------------------------------------------------------
+    function setIco(id, src) { var el = $(id); if (el.getAttribute("src") !== src) el.setAttribute("src", src); }
     function realFee() { return feeData && feeData.fees[tokenKey] ? BigInt(feeData.fees[tokenKey].raw) : null; }
     function fee() { return feeOverride !== null ? feeOverride : realFee(); }
     function gasPriceWei() { return feeData ? BigInt(Math.round(feeData.gas_price_gwei * 1e9)) : null; }
@@ -503,6 +521,10 @@
       $("toNet").textContent = wd ? "Ethereum" : "Injective";
       $("toToken").textContent = wd && t.native ? "WETH" : t.sym;
       $("amSym").textContent = t.sym;
+      // WETH arriving on Ethereum is still the ETH diamond, as Injective's own token list draws it
+      var tokIco = "/icons/tokens/" + tokenKey + ".svg", ethIco = "/icons/tokens/eth.svg", injIco = "/icons/tokens/inj.svg";
+      setIco("tokenIco", tokIco); setIco("toTokenIco", tokIco); setIco("amIco", tokIco);
+      setIco("fromIco", wd ? injIco : ethIco); setIco("toIco", wd ? ethIco : injIco);
       swapBtn.classList.toggle("turned", wd);
 
       var av = available();

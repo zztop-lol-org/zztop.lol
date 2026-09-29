@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- our own origin, Injective mainnet LCDs (sentry first, mirrors as failover), and
+       two public Ethereum RPCs for balances and allowances -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.lcd.injective.network https://injective-rest.publicnode.com https://injective-api.polkachu.com https://ethereum-rpc.publicnode.com https://eth.drpc.org; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — zzbridge</title>
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="canonical" href="https://zztop.lol/bridge" />
+  <meta property="og:title" content="zztop — zzbridge" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zztop.lol/bridge" />
+  <meta property="og:image" content="https://zztop.lol/icons/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
+  <script>
+    /* Cross-document view transitions: same slide + scroll-restoring back as /auction. */
+    (function () {
+      var DIR = "zz_dir", PATH = "zz_path", TTL = 10000;
+      var norm = function (p) {
+        try { p = new URL(p, location.href).pathname; } catch (e) { return p; }
+        return p.length > 1 && p.slice(-1) === "/" ? p.slice(0, -1) : p;
+      };
+      var stack = function () { try { return JSON.parse(sessionStorage.getItem(PATH) || "[]"); } catch (e) { return []; } };
+      var save = function (v) { try { sessionStorage.setItem(PATH, JSON.stringify(v.slice(-10))); } catch (e) {} };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (!a) return;
+        var dir = a.getAttribute("data-dir"), s = stack();
+        try { sessionStorage.setItem(DIR, dir + "|" + Date.now()); } catch (x) {}
+        if (dir === "forward") { s.push(norm(location.pathname)); save(s); return; }
+        if (s.length && s[s.length - 1] === norm(a.getAttribute("href")) && history.length > 1) {
+          s.pop(); save(s); e.preventDefault(); history.back();
+        }
+      }, true);
+      var type = function (nav, clear) {
+        var d = null;
+        try {
+          var v = sessionStorage.getItem(DIR);
+          if (v) {
+            if (clear) sessionStorage.removeItem(DIR);
+            var p = v.split("|");
+            d = (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+          }
+        } catch (e) {}
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
+      });
+    })();
+  </script>
+  <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; --line: rgba(124,255,176,.16); --warn: #ffcf8f; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100dvh; display: flex; flex-direction: column; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
+
+    .topbar { flex: 0 0 auto; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
+    .zzback { display: inline-flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: clamp(1rem, 3.2vw, 1.5rem); letter-spacing: 0.04em; color: var(--green); text-decoration: none; text-shadow: 0 0 0.4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
+    .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
+
+    main { flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1.4rem; padding: 2rem 1rem 2rem; text-align: center; }
+    .title { font-weight: 800; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
+    .lede { font-weight: 300; font-size: 1.02rem; line-height: 1.6; max-width: 34rem; }
+    .lede p { margin-bottom: .6rem; }
+    .lede .dim { color: var(--dim); }
+
+    /* the card, laid out like bridge.injective.network: two token/network pairs with a
+       swap between them, the amount box, the terms, one button */
+    .card { width: 100%; max-width: 34rem; border: 1px solid var(--line); border-radius: .7rem; padding: 1.1rem; display: flex; flex-direction: column; gap: .75rem; background: rgba(124,255,176,.02); text-align: left; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .box { border: 1px solid var(--line); border-radius: .55rem; padding: .7rem .85rem; display: flex; flex-direction: column; gap: .2rem; min-width: 0; background: rgba(0,0,0,.25); }
+    .lbl { font-weight: 300; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+    .val { font-weight: 800; font-size: 1.05rem; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    select.val { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; color: var(--green); border: 0; font-family: inherit; cursor: pointer; padding-right: 1.2em;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237CFFB0' stroke-width='1.6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right center; background-size: .7em; }
+    select.val option { background: #0a0a0f; color: var(--green); }
+    .swapwrap { display: flex; justify-content: center; margin: -.45rem 0; position: relative; z-index: 1; }
+    .swap { width: 2.3rem; height: 2.3rem; border-radius: 50%; border: 1px solid rgba(124,255,176,.4); background: #0a0a0f; color: var(--green); cursor: pointer; display: grid; place-items: center; transition: transform .25s, box-shadow .2s, border-color .2s; }
+    .swap:hover { border-color: var(--green); box-shadow: 0 0 .9em rgba(124,255,176,.35); }
+    .swap.turned { transform: rotate(180deg); }
+    .swap svg { width: 1rem; height: 1rem; }
+
+    .amount { border: 1px solid var(--line); border-radius: .55rem; padding: .8rem .85rem; display: flex; flex-direction: column; gap: .55rem; background: rgba(0,0,0,.25); }
+    .amhead { display: flex; justify-content: space-between; align-items: baseline; }
+    .avail { font-weight: 300; font-size: .8rem; color: var(--dim); }
+    .avail b { color: var(--green); font-weight: 800; }
+    .amrow { display: flex; align-items: center; gap: .6rem; }
+    .amrow input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--green); font-family: inherit; font-weight: 800; font-size: clamp(1.4rem, 6vw, 1.9rem); outline: none; }
+    .amrow input::placeholder { color: var(--dim); }
+    .amrow .sym { font-weight: 800; font-size: 1.05rem; }
+    .chips { display: flex; gap: .4rem; }
+    .chips button { flex: 1; font-family: inherit; font-weight: 800; font-size: .75rem; letter-spacing: .04em; color: var(--dim); background: transparent; border: 1px solid var(--line); border-radius: .35rem; padding: .4em 0; cursor: pointer; }
+    .chips button:hover:not(:disabled) { color: var(--green); border-color: var(--green); }
+    .chips button:disabled { opacity: .4; cursor: default; }
+
+    .terms { display: flex; flex-direction: column; gap: .45rem; font-weight: 300; font-size: .9rem; padding: .15rem .1rem; }
+    .term { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+    .term > span:first-child { color: var(--dim); white-space: nowrap; }
+    .term > span:last-child { text-align: right; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem; }
+    .term a { color: var(--green); text-decoration: underline; text-underline-offset: .2em; }
+    .note { font-weight: 300; font-size: .78rem; line-height: 1.5; color: var(--dim); text-align: right; }
+    .note.warn { color: var(--warn); }
+    .pen { background: transparent; border: 0; padding: 0 0 0 .45em; color: var(--dim); cursor: pointer; vertical-align: middle; }
+    .pen svg { width: .9em; height: .9em; display: block; }
+    .pen:hover { color: var(--green); }
+    .feeinput { width: 7.5em; text-align: right; font-family: inherit; font-size: inherit; color: var(--green); background: transparent; border: 0; border-bottom: 1px solid var(--green); padding: 0 .2em; outline: none; }
+
+    .go { width: 100%; font-weight: 800; font-size: 1.1rem; letter-spacing: .02em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .8em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
+    .go:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+
+    .msg { font-weight: 300; font-size: .9rem; min-height: 1.4em; color: var(--dim); overflow-wrap: anywhere; text-align: center; line-height: 1.5; }
+    .msg.err { color: #ff8f8f; }
+    .msg.ok { color: var(--green); }
+    .msg a { color: var(--green); }
+    .hidden { display: none !important; }
+
+    .connect { font-weight: 800; font-size: 1.2rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .6em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); cursor: pointer; font-family: inherit; }
+    .who { font-weight: 300; font-size: .85rem; color: var(--dim); word-break: break-all; min-height: 1.2em; }
+    .picker { display: flex; flex-direction: column; gap: .6rem; }
+    .picker button { display: flex; align-items: center; gap: .7rem; justify-content: center; font-family: inherit; font-weight: 800; font-size: 1rem; color: var(--green); background: transparent; border: 2px solid var(--green); border-radius: .5rem; padding: .6em 1em; cursor: pointer; }
+    .picker button:hover { background: var(--green); color: #0a0a0f; }
+    .picker img { width: 1.4em; height: 1.4em; border-radius: .3em; }
+    .disconnect { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-weight: 300; font-size: .85rem; text-decoration: underline; cursor: pointer; }
+    .disconnect:hover { color: var(--green); }
+    .walletbar { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: 1rem 1rem 1.8rem; }
+    .walletbar .who { max-width: 90vw; }
+    /* the card's own button is the call to action here (unlike /auction, the card is on
+       screen before a wallet connects), so the footer keeps only the picker and the
+       connected address rather than showing a second CONNECT WALLET */
+    #connect { display: none !important; }
+
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
+    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
+    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
+    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
+    html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
+    html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
+    html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+    @media (prefers-reduced-motion: reduce) { .swap { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/" id="zzback" data-dir="back">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span>ZZBACK</span>
+    </a>
+  </header>
+
+  <main>
+    <h1 class="title">ZZBRIDGE</h1>
+    <div class="lede">
+      <p>ethereum to injective and back, over peggy.</p>
+      <p>withdrawals pay what relaying them actually costs in gas right now. not a flat $5.</p>
+      <p class="dim">the fee is an eth amount, converted to your token at a fresh rate every time you load the page.</p>
+    </div>
+
+    <section class="card" id="card">
+      <div class="pair">
+        <div class="box">
+          <label class="lbl" for="token">token</label>
+          <select class="val" id="token" aria-label="token">
+            <option value="inj">INJ</option>
+            <option value="eth">ETH</option>
+            <option value="usdt">USDT</option>
+            <option value="usdc">USDC</option>
+          </select>
+        </div>
+        <div class="box"><span class="lbl">from</span><span class="val" id="fromNet">Ethereum</span></div>
+      </div>
+
+      <div class="swapwrap">
+        <button class="swap" id="swap" type="button" aria-label="swap direction" title="swap direction">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 2v11M5 13l-3-3M5 13l3-3M11 14V3M11 3L8 6M11 3l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <div class="pair">
+        <div class="box"><span class="lbl">token</span><span class="val" id="toToken">INJ</span></div>
+        <div class="box"><span class="lbl">to</span><span class="val" id="toNet">Injective</span></div>
+      </div>
+
+      <div class="amount">
+        <div class="amhead">
+          <label class="lbl" for="amount">amount</label>
+          <span class="avail">available <b id="avail">—</b></span>
+        </div>
+        <div class="amrow">
+          <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="amount" />
+          <span class="sym" id="amSym">INJ</span>
+        </div>
+        <div class="chips">
+          <button type="button" data-pct="25">25%</button>
+          <button type="button" data-pct="50">50%</button>
+          <button type="button" data-pct="75">75%</button>
+          <button type="button" data-pct="100">100%</button>
+        </div>
+      </div>
+
+      <div class="terms" id="terms">
+        <div class="term hidden" id="feeRow">
+          <span>relay fee</span>
+          <span><span id="feeVal">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /><button class="pen" id="feeEdit" type="button" title="change the fee" aria-label="change the fee"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button></span>
+        </div>
+        <div class="note hidden" id="feeNote"></div>
+        <div class="term"><span>you receive</span><span id="receive">—</span></div>
+        <div class="term"><span>to</span><span id="dest">connect a wallet</span></div>
+        <div class="term" id="gasRow"><span>ethereum gas</span><span id="gasVal">—</span></div>
+      </div>
+
+      <button class="go" id="go" type="button">CONNECT WALLET</button>
+      <p class="msg" id="msg"></p>
+    </section>
+  </main>
+
+  <footer class="walletbar" id="walletbar">
+    <button class="connect" id="connect">CONNECT WALLET</button>
+    <div class="picker hidden" id="picker"></div>
+    <div class="who" id="who"></div>
+    <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
+  </footer>
+
+  <script>
+    // ---- config -------------------------------------------------------------------
+    var PEGGY = "0xF955C57f9EA9Dc8781965FEaE0b6A2acE2BAD6f3";   // Peggy on Ethereum (peggy params)
+    var WETH  = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+    // Every token keeps its ERC-20 decimals on Injective; INJ arrives as native `inj`.
+    var TOKENS = {
+      inj:  { sym: "INJ",  erc20: "0xe28b3B32B6c345A34Ff64674606124Dd5Aceca30", dec: 18, denom: "inj" },
+      eth:  { sym: "ETH",  erc20: WETH, dec: 18, denom: "peggy0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", native: true },
+      usdt: { sym: "USDT", erc20: "0xdAC17F958D2ee523a2206206994597C13D831ec7", dec: 6, denom: "peggy0xdAC17F958D2ee523a2206206994597C13D831ec7", resetApprove: true },
+      usdc: { sym: "USDC", erc20: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", dec: 6, denom: "peggy0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+    };
+    var LCDS = ["https://sentry.lcd.injective.network", "https://injective-rest.publicnode.com", "https://injective-api.polkachu.com"];
+    var ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org"];
+    var CHAIN_ID = "injective-1";
+    var EVM_CHAIN_ID = 1776, EVM_CHAIN_HEX = "0x6f0";   // Injective EVM, same network as injective-1
+    var ETH_CHAIN_HEX = "0x1";
+    var INJ_TX_FEE = 64000000000000n;   // getDefaultStdFee: 400k gas x 160M inj — the Injective tx itself
+    var DEPOSIT_GAS = 165000n;           // wrap ~45k + approve ~46k + sendToInjective ~65-72k, measured on mainnet
+    var ARRIVAL_TIMEOUT_MS = 45 * 60 * 1000;
+
+    var $ = function (id) { return document.getElementById(id); };
+    var tokenSel = $("token"), swapBtn = $("swap"), amountIn = $("amount"), goBtn = $("go"), msg = $("msg"),
+        connectBtn = $("connect"), picker = $("picker"), who = $("who"), disconnectBtn = $("disconnect"),
+        feeRow = $("feeRow"), feeVal = $("feeVal"), feeInput = $("feeInput"), feeEdit = $("feeEdit"), feeNote = $("feeNote");
+
+    // ---- state --------------------------------------------------------------------
+    var dir = "deposit";          // deposit: Ethereum -> Injective · withdraw: Injective -> Ethereum
+    var tokenKey = "inj";
+    var account = null, selectedProvider = null, currentName = null, injAddress = null;
+    var feeData = null;           // /api/bridge-fee, fetched fresh on every load
+    var feeOverride = null;       // BigInt raw, only when the user edited the fee
+    var bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
+    var busy = false, sdk = null;
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
+    var PREF = "zz_bridge";
+    try { var p = JSON.parse(localStorage.getItem(PREF) || "{}"); if (p.dir) dir = p.dir; if (TOKENS[p.token]) tokenKey = p.token; } catch (e) {}
+    function savePref() { try { localStorage.setItem(PREF, JSON.stringify({ dir: dir, token: tokenKey })); } catch (e) {} }
+
+    // ---- units --------------------------------------------------------------------
+    function parseUnits(s, dec) {
+      s = String(s || "").trim().replace(",", ".");
+      if (!/^\d*\.?\d*$/.test(s) || s === "" || s === ".") return null;
+      var parts = s.split("."), whole = parts[0] || "0", frac = (parts[1] || "");
+      if (frac.length > dec) frac = frac.slice(0, dec);
+      return BigInt(whole) * 10n ** BigInt(dec) + BigInt((frac + "0".repeat(dec)).slice(0, dec) || "0");
+    }
+    function formatUnits(raw, dec, shown) {
+      if (raw === null || raw === undefined) return "—";
+      var neg = raw < 0n; if (neg) raw = -raw;
+      var s = raw.toString().padStart(dec + 1, "0");
+      var whole = s.slice(0, s.length - dec), frac = s.slice(s.length - dec).slice(0, shown === undefined ? 6 : shown).replace(/0+$/, "");
+      return (neg ? "-" : "") + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (frac ? "." + frac : "");
+    }
+    var plain = function (raw, dec, shown) { return formatUnits(raw, dec, shown).replace(/,/g, ""); };
+
+    // ---- inj bech32 (same inlined encoder as /auction) -----------------------------
+    var B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    function bechPolymod(v) {
+      var G = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3], c = 1;
+      for (var p = 0; p < v.length; ++p) { var t = c >> 25; c = ((c & 0x1ffffff) << 5) ^ v[p]; for (var i = 0; i < 5; ++i) if ((t >> i) & 1) c ^= G[i]; }
+      return c;
+    }
+    function hrpExpand(h) { var r = [], i; for (i = 0; i < h.length; ++i) r.push(h.charCodeAt(i) >> 5); r.push(0); for (i = 0; i < h.length; ++i) r.push(h.charCodeAt(i) & 31); return r; }
+    function convertBits(d, f, t, pad) {
+      var acc = 0, bits = 0, r = [], maxv = (1 << t) - 1;
+      for (var p = 0; p < d.length; ++p) { acc = (acc << f) | d[p]; bits += f; while (bits >= t) { bits -= t; r.push((acc >> bits) & maxv); } }
+      if (pad && bits > 0) r.push((acc << (t - bits)) & maxv);
+      return r;
+    }
+    function getInjectiveAddress(hex) {
+      hex = String(hex).replace(/^0x/, ""); var b = [];
+      for (var i = 0; i < hex.length; i += 2) b.push(parseInt(hex.substr(i, 2), 16));
+      var data = convertBits(b, 8, 5, true), pm = bechPolymod(hrpExpand("inj").concat(data).concat([0, 0, 0, 0, 0, 0])) ^ 1, cs = [];
+      for (var j = 0; j < 6; ++j) cs.push((pm >> 5 * (5 - j)) & 31);
+      var out = "inj1"; data.concat(cs).forEach(function (d) { out += B32.charAt(d); }); return out;
+    }
+    var short = function (a) { return a ? a.slice(0, a.indexOf("1") > 0 && a.indexOf("0x") !== 0 ? 8 : 6) + "…" + a.slice(-4) : ""; };
+
+    // ---- ethereum calldata ----------------------------------------------------------
+    // Hand-encoded rather than bundled: four fixed calls. sendToInjective's layout was
+    // checked byte-for-byte against a real mainnet deposit (0xca0a341f…).
+    var pad32 = function (h) { return String(h).replace(/^0x/, "").toLowerCase().padStart(64, "0"); };
+    var u256 = function (n) { return BigInt(n).toString(16).padStart(64, "0"); };
+    var enc = {
+      balanceOf: function (owner) { return "0x70a08231" + pad32(owner); },
+      allowance: function (owner, spender) { return "0xdd62ed3e" + pad32(owner) + pad32(spender); },
+      approve:   function (spender, amt) { return "0x095ea7b3" + pad32(spender) + u256(amt); },
+      wrap:      function () { return "0xd0e30db0"; },                         // WETH deposit()
+      // sendToInjective(address token, bytes32 destination, uint256 amount, string data)
+      // destination: the recipient's 20-byte address, left-padded to 32 bytes
+      sendToInjective: function (token, dest, amt) {
+        return "0xb24614f2" + pad32(token) + pad32(dest) + u256(amt) + u256(0x80) + u256(0);
+      },
+    };
+
+    // ---- reads ----------------------------------------------------------------------
+    async function ethRpc(method, params) {
+      var last;
+      for (var i = 0; i < ETH_RPCS.length; i++) {
+        try {
+          var r = await fetch(ETH_RPCS[i], { method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
+          var j = await r.json();
+          if (j && j.result !== undefined) return j.result;
+          last = new Error((j && j.error && j.error.message) || "rpc error");
+        } catch (e) { last = e; }
+      }
+      throw last || new Error("no ethereum rpc answered");
+    }
+    var erc20Balance = async function (token, owner) { return BigInt(await ethRpc("eth_call", [{ to: token, data: enc.balanceOf(owner) }, "latest"])); };
+    var erc20Allowance = async function (token, owner, spender) { return BigInt(await ethRpc("eth_call", [{ to: token, data: enc.allowance(owner, spender) }, "latest"])); };
+
+    async function lcdGet(path) {
+      for (var i = 0; i < LCDS.length; i++) {
+        try { var r = await fetch(LCDS[i] + path, { cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) {}
+      }
+      return null;
+    }
+    async function injBalance(addr, denom) {
+      var j = await lcdGet("/cosmos/bank/v1beta1/balances/" + addr + "/by_denom?denom=" + encodeURIComponent(denom));
+      try { return BigInt(j.balance.amount); } catch (e) { return null; }
+    }
+
+    async function loadFee() {
+      try {
+        var r = await fetch("/api/bridge-fee", { cache: "no-store" });
+        var j = await r.json();
+        feeData = r.ok && j && j.fees ? j : null;
+      } catch (e) { feeData = null; }
+      render();
+    }
+
+    async function loadBalances() {
+      if (!account) return;
+      var t = TOKENS[tokenKey], jobs = [];
+      if (dir === "deposit") {
+        jobs.push(erc20Balance(t.erc20, account).then(function (b) { bal.eth[tokenKey] = b; }).catch(function () {}));
+        if (t.native) jobs.push(ethRpc("eth_getBalance", [account, "latest"]).then(function (b) { bal.ethNative = BigInt(b); }).catch(function () {}));
+      } else {
+        jobs.push(injBalance(injAddress, t.denom).then(function (b) { if (b !== null) bal.inj[tokenKey] = b; }));
+        if (tokenKey !== "inj") jobs.push(injBalance(injAddress, "inj").then(function (b) { if (b !== null) bal.injGas = b; }));
+      }
+      await Promise.all(jobs);
+      render();
+    }
+
+    // ---- derived numbers ------------------------------------------------------------
+    function realFee() { return feeData && feeData.fees[tokenKey] ? BigInt(feeData.fees[tokenKey].raw) : null; }
+    function fee() { return feeOverride !== null ? feeOverride : realFee(); }
+    function gasPriceWei() { return feeData ? BigInt(Math.round(feeData.gas_price_gwei * 1e9)) : null; }
+
+    // What can actually be sent: on Ethereum, native ETH keeps a little back for the
+    // transactions themselves; on Injective the fee comes out of the same balance.
+    function available() {
+      var t = TOKENS[tokenKey];
+      if (dir === "deposit") {
+        if (bal.eth[tokenKey] === undefined) return null;
+        if (!t.native) return bal.eth[tokenKey];
+        var gp = gasPriceWei() || 3000000000n;
+        var reserve = DEPOSIT_GAS * gp * 3n;                  // three sends' worth of margin
+        var nat = bal.ethNative > reserve ? bal.ethNative - reserve : 0n;
+        return nat + bal.eth[tokenKey];                       // native ETH plus any WETH already held
+      }
+      var b = bal.inj[tokenKey], f = fee();
+      if (b === undefined || f === null) return null;
+      var spend = b - f - (tokenKey === "inj" ? INJ_TX_FEE * 2n : 0n);
+      return spend > 0n ? spend : 0n;
+    }
+
+    // ---- render -------------------------------------------------------------------
+    function render() {
+      var t = TOKENS[tokenKey], wd = dir === "withdraw";
+      tokenSel.value = tokenKey;
+      $("fromNet").textContent = wd ? "Injective" : "Ethereum";
+      $("toNet").textContent = wd ? "Ethereum" : "Injective";
+      $("toToken").textContent = wd && t.native ? "WETH" : t.sym;
+      $("amSym").textContent = t.sym;
+      swapBtn.classList.toggle("turned", wd);
+
+      var av = available();
+      $("avail").textContent = account ? (av === null ? "…" : formatUnits(av, t.dec, 6) + " " + t.sym) : "—";
+      [].forEach.call(document.querySelectorAll(".chips button"), function (b) { b.disabled = !account || !av; });
+
+      var amt = parseUnits(amountIn.value, t.dec);
+
+      // fee: only withdrawals pay one. Shown as the ETH it really is, then converted.
+      feeRow.classList.toggle("hidden", !wd);
+      feeNote.classList.toggle("hidden", !wd);
+      if (wd) {
+        var f = fee(), rf = realFee();
+        if (feeInput.classList.contains("hidden"))
+          feeVal.textContent = f === null ? (feeData === null ? "unavailable" : "…") : formatUnits(f, t.dec, 6) + " " + t.sym;
+        if (feeData) {
+          var usd = feeData.fee_usd.toFixed(2);
+          var line = feeData.fee_eth + " ETH of gas right now (" + Math.round(feeData.gas_units / 1000) + "k gas × " +
+            feeData.gas_price_gwei.toFixed(2) + " gwei) ≈ $" + usd + " · the official bridge charges ≈ $" + feeData.official_usd;
+          var below = feeOverride !== null && rf !== null && feeOverride < rf;
+          feeNote.textContent = below
+            ? "below the real relay cost right now — relayers may not pick it up. real cost: " + formatUnits(rf, t.dec, 6) + " " + t.sym
+            : line;
+          feeNote.className = "note" + (below ? " warn" : "");
+        } else feeNote.textContent = "could not read ethereum gas and prices just now — reload to try again";
+      }
+
+      $("receive").textContent = amt ? formatUnits(amt, t.dec, 6) + " " + (wd && t.native ? "WETH" : t.sym) + (wd ? " on Ethereum" : " on Injective") : "—";
+      $("dest").textContent = !account ? "connect a wallet" : wd ? account.slice(0, 6) + "…" + account.slice(-4) + " (your wallet)" : injAddress.slice(0, 8) + "…" + injAddress.slice(-4) + " (your injective account)";
+
+      var gp = gasPriceWei();
+      $("gasRow").classList.toggle("hidden", wd);
+      $("gasVal").textContent = gp && feeData ? "≈ " + formatUnits(DEPOSIT_GAS * gp, 18, 6) + " ETH (≈ $" + (Number(DEPOSIT_GAS * gp) / 1e18 * feeData.usd.eth).toFixed(2) + ")" : "—";
+
+      paintButton(amt, av);
+    }
+
+    function paintButton(amt, av) {
+      if (busy) return;
+      var t = TOKENS[tokenKey], wd = dir === "withdraw";
+      var label = "", ok = false;
+      if (!account) { label = "CONNECT WALLET"; ok = true; }
+      else if (wd && realFee() === null) label = feeData === null ? "FEE UNAVAILABLE" : "LOADING…";
+      else if (!amt || amt <= 0n) label = "ENTER AN AMOUNT";
+      else if (av === null) label = "LOADING…";
+      else if (amt > av) label = "NOT ENOUGH " + t.sym;
+      else if (wd && fee() !== null && fee() <= 0n) label = "FEE MUST BE ABOVE 0";
+      else if (wd && tokenKey !== "inj" && bal.injGas < INJ_TX_FEE) label = "NEED A LITTLE INJ FOR GAS";
+      else { label = wd ? "BRIDGE TO ETHEREUM" : "BRIDGE TO INJECTIVE"; ok = true; }
+      goBtn.textContent = label;
+      goBtn.disabled = !ok;
+    }
+
+    // ---- inputs -------------------------------------------------------------------
+    tokenSel.addEventListener("change", function () {
+      tokenKey = tokenSel.value; feeOverride = null; amountIn.value = ""; savePref(); setMsg(""); render(); loadBalances();
+    });
+    swapBtn.addEventListener("click", function () {
+      if (busy) return;
+      dir = dir === "deposit" ? "withdraw" : "deposit"; feeOverride = null; savePref(); setMsg(""); render(); loadBalances();
+    });
+    amountIn.addEventListener("input", function () { render(); });
+    [].forEach.call(document.querySelectorAll(".chips button"), function (b) {
+      b.addEventListener("click", function () {
+        var av = available(); if (!av) return;
+        var t = TOKENS[tokenKey];
+        amountIn.value = plain((av * BigInt(b.getAttribute("data-pct"))) / 100n, t.dec, t.dec);
+        render();
+      });
+    });
+    $("avail").addEventListener("click", function () {
+      var av = available(); if (!av) return;
+      amountIn.value = plain(av, TOKENS[tokenKey].dec, TOKENS[tokenKey].dec); render();
+    });
+
+    // the fee is editable: raise it to be safe, or lower it at your own risk. The
+    // protocol only requires it to be above zero.
+    feeEdit.addEventListener("click", function () {
+      var t = TOKENS[tokenKey], f = fee();
+      feeInput.value = f === null ? "" : plain(f, t.dec, t.dec);
+      feeVal.classList.add("hidden"); feeInput.classList.remove("hidden"); feeInput.focus(); feeInput.select();
+    });
+    function commitFee() {
+      var t = TOKENS[tokenKey], v = parseUnits(feeInput.value, t.dec);
+      if (v !== null && v > 0n) feeOverride = (realFee() !== null && v === realFee()) ? null : v;
+      feeInput.classList.add("hidden"); feeVal.classList.remove("hidden"); render();
+    }
+    feeInput.addEventListener("blur", commitFee);
+    feeInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") feeInput.blur();
+      if (e.key === "Escape") { feeInput.value = ""; feeInput.blur(); }
+    });
+
+    // ---- wallet (same connect flow as /auction, incl. the Brave-mobile single request) -
+    var discovered = {};
+    window.addEventListener("eip6963:announceProvider", function (e) {
+      var d = e.detail; if (d && d.info && d.provider) discovered[d.info.rdns || d.info.uuid || d.info.name] = d;
+    });
+    function requestProviders() { window.dispatchEvent(new Event("eip6963:requestProvider")); }
+    requestProviders();
+    function providerList() {
+      var list = Object.keys(discovered).map(function (k) { return discovered[k]; });
+      if (!list.length && window.ethereum) {
+        var e = window.ethereum;
+        list = [{ info: { name: e.isRabby ? "Rabby" : e.isMetaMask ? "MetaMask" : e.isKeplr ? "Keplr" : "Injected wallet" }, provider: e }];
+      }
+      return list;
+    }
+    var STORE = "zz_wallet";
+    function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
+    function loadWallet() { try { return localStorage.getItem(STORE); } catch (e) { return null; } }
+    function forgetWallet() { try { localStorage.removeItem(STORE); } catch (e) {} }
+
+    function showConnected() {
+      injAddress = getInjectiveAddress(account);
+      bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };   // nothing carries over between wallets
+      who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
+      connectBtn.classList.add("hidden"); picker.classList.add("hidden"); disconnectBtn.classList.remove("hidden");
+      setMsg(""); render(); loadBalances();
+    }
+    function resetConnection() {
+      account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
+      bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
+      who.textContent = ""; disconnectBtn.classList.add("hidden"); picker.classList.add("hidden"); connectBtn.classList.remove("hidden");
+      setMsg(""); render();
+    }
+    function bindAccountEvents(prov) {
+      if (prov && prov.on && !prov.__zzBound) {
+        prov.__zzBound = true;
+        prov.on("accountsChanged", function (a) { if (!a || !a.length) resetConnection(); else { account = a[0]; showConnected(); } });
+      }
+    }
+    function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
+    async function connectWith(entry, silent) {
+      try {
+        // one request per gesture: a second one breaks Brave's mobile in-app browser
+        var a = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
+        if (!a || !a.length) { if (!silent) { setMsg("no account authorized", "err"); backToConnect(); } return false; }
+        account = a[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";
+        saveWallet(entry.info.rdns || entry.info.name || ""); bindAccountEvents(entry.provider); showConnected();
+        return true;
+      } catch (e) { if (!silent) { setMsg("connection cancelled", "err"); backToConnect(); } return false; }
+    }
+    async function openPicker() {
+      requestProviders(); await sleep(400);
+      var list = providerList();
+      if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
+      picker.innerHTML = "";
+      list.forEach(function (entry) {
+        var b = document.createElement("button");
+        if (entry.info.icon) { var im = document.createElement("img"); im.src = entry.info.icon; im.alt = ""; b.appendChild(im); }
+        var s = document.createElement("span"); s.textContent = entry.info.name || "wallet"; b.appendChild(s);
+        b.addEventListener("click", function () { connectWith(entry); });
+        picker.appendChild(b);
+      });
+      connectBtn.classList.add("hidden"); picker.classList.remove("hidden");
+      setMsg("choose a wallet");
+      picker.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    connectBtn.addEventListener("click", openPicker);
+    disconnectBtn.addEventListener("click", resetConnection);
+    (async function restore() {
+      var id = loadWallet(); if (!id) return;
+      requestProviders(); await sleep(300);
+      var list = providerList();
+      var entry = list.filter(function (e) { return (e.info.rdns || e.info.name) === id; })[0] || (list.length === 1 ? list[0] : null);
+      if (entry) await connectWith(entry, true);
+    })();
+
+    // ---- chains ---------------------------------------------------------------------
+    async function ensureChain(hex, add, name) {
+      var cur;
+      try { cur = await selectedProvider.request({ method: "eth_chainId" }); } catch (e) { return; }
+      if (String(cur).toLowerCase() === hex) return;
+      setMsg("switching your wallet to " + name + "…");
+      try { await selectedProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] }); }
+      catch (e) {
+        var unknown = e && (e.code === 4902 || /unrecognized|not added|unsupported chain/i.test(e.message || ""));
+        if (!unknown || !add) throw e;
+        await selectedProvider.request({ method: "wallet_addEthereumChain", params: [add] });
+      }
+      var now = await selectedProvider.request({ method: "eth_chainId" });
+      if (String(now).toLowerCase() !== hex) throw new Error("switch your wallet to " + name + " and try again");
+    }
+    var ensureEthereum = function () { return ensureChain(ETH_CHAIN_HEX, null, "Ethereum"); };
+    // eth_signTypedData_v4 checks domain.chainId against the wallet's active chain
+    var ensureInjective = function () {
+      return ensureChain(EVM_CHAIN_HEX, {
+        chainId: EVM_CHAIN_HEX, chainName: "Injective EVM",
+        nativeCurrency: { name: "Injective", symbol: "INJ", decimals: 18 },
+        rpcUrls: ["https://sentry.evm-rpc.injective.network/"], blockExplorerUrls: ["https://blockscout.injective.network/"],
+      }, "Injective");
+    };
+
+    // Send through the wallet, then wait for it to land. A reverted transaction is an
+    // error, not a success with a hash.
+    async function sendEth(tx, label) {
+      setMsg(label + " — confirm in your wallet…");
+      var p = { from: account, to: tx.to, data: tx.data };
+      if (tx.value) p.value = "0x" + tx.value.toString(16);
+      var hash = await selectedProvider.request({ method: "eth_sendTransaction", params: [p] });
+      setMsg(label + " — waiting for ethereum…");
+      for (var i = 0; i < 400; i++) {
+        var rc = null;
+        try { rc = await selectedProvider.request({ method: "eth_getTransactionReceipt", params: [hash] }); } catch (e) {}
+        if (!rc) { try { rc = await ethRpc("eth_getTransactionReceipt", [hash]); } catch (e) {} }
+        if (rc && rc.blockNumber) {
+          if (rc.status !== "0x1") throw new Error(label + " failed on ethereum (" + hash.slice(0, 10) + "…)");
+          return hash;
+        }
+        await sleep(3000);
+      }
+      throw new Error(label + " is still pending — check " + hash);
+    }
+
+    function link(url, text) { var a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = text; return a; }
+
+    // Watch the destination balance until the amount shows up, so "it's on its way"
+    // turns into "it arrived" without anyone refreshing.
+    async function watchArrival(check, before, amount, where) {
+      var start = Date.now();
+      while (Date.now() - start < ARRIVAL_TIMEOUT_MS) {
+        await sleep(10000);
+        var now = null; try { now = await check(); } catch (e) {}
+        if (now !== null && now - before >= amount) {
+          msg.appendChild(document.createElement("br"));
+          msg.appendChild(document.createTextNode("arrived on " + where + "."));
+          loadBalances();
+          return;
+        }
+      }
+    }
+
+    // ---- the button -----------------------------------------------------------------
+    goBtn.addEventListener("click", async function () {
+      if (!account) { openPicker(); return; }
+      var t = TOKENS[tokenKey], amt = parseUnits(amountIn.value, t.dec);
+      if (!amt || amt <= 0n || busy) return;
+      busy = true; goBtn.disabled = true; goBtn.textContent = "WORKING…";
+      var key = tokenKey;
+      try {
+        if (dir === "deposit") await deposit(key, amt);
+        else await withdraw(key, amt);
+        amountIn.value = "";
+      } catch (e) {
+        var m = (e && (e.message || e.originalMessage)) || "something went wrong";
+        if (e && e.code === 4001 || /user (rejected|denied)|rejected the request/i.test(m)) m = "cancelled in your wallet";
+        else if (/account .* not found/i.test(m)) m = "this wallet has no Injective account yet — it needs a little INJ first";
+        setMsg(m, "err");
+      } finally {
+        busy = false; render(); loadBalances();
+      }
+    });
+
+    async function deposit(key, amt) {
+      var t = TOKENS[key];
+      await ensureEthereum();
+      var token = t.erc20;
+      if (t.native) {
+        // Peggy takes ERC-20s only, so ETH goes in as WETH. Anything already held as
+        // WETH is used first; only the shortfall is wrapped.
+        var weth = await erc20Balance(WETH, account);
+        if (amt > weth) await sendEth({ to: WETH, data: enc.wrap(), value: amt - weth }, "wrapping ETH to WETH");
+      }
+      var allowed = await erc20Allowance(token, account, PEGGY);
+      if (allowed < amt) {
+        // USDT refuses to change a non-zero allowance to another non-zero value
+        if (t.resetApprove && allowed > 0n) await sendEth({ to: token, data: enc.approve(PEGGY, 0n) }, "resetting the " + t.sym + " allowance");
+        await sendEth({ to: token, data: enc.approve(PEGGY, amt) }, "approving " + t.sym);
+      }
+      var before = await injBalance(injAddress, t.denom);
+      var hash = await sendEth({ to: PEGGY, data: enc.sendToInjective(token, account, amt) }, "sending to injective");
+      msg.className = "msg ok"; msg.textContent = "sent — it lands on injective once validators confirm the deposit. ";
+      msg.appendChild(link("https://etherscan.io/tx/" + hash, "etherscan " + hash.slice(0, 10) + "…"));
+      if (before !== null) watchArrival(function () { return injBalance(injAddress, t.denom); }, before, amt, "injective");
+    }
+
+    async function withdraw(key, amt) {
+      var t = TOKENS[key], f = fee();
+      if (f === null || f <= 0n) throw new Error("the relay fee is not available — reload the page");
+      await ensureInjective();
+      setMsg("loading…");
+      sdk = sdk || await import("/lib/bridge.js?v=20d50b29de");
+      var m = sdk.buildWithdraw({ injectiveAddress: injAddress, ethDest: account, denom: t.denom, amountRaw: amt, feeRaw: f });
+      setMsg("finding a healthy endpoint…");
+      var picked = await sdk.pickEndpoint(LCDS);
+      var before = null; try { before = await erc20Balance(t.erc20, account); } catch (e) {}
+      setMsg("sign in your wallet…");
+      var res = await sdk.sendTxs({
+        ethereumAddress: account, injectiveAddress: injAddress,
+        groups: [{ label: "withdraw", msgs: [m] }],
+        restEndpoint: picked.endpoint, chainId: CHAIN_ID, evmChainId: EVM_CHAIN_ID, memo: "zzbridge",
+        signTypedData: function (addr, json) { return selectedProvider.request({ method: "eth_signTypedData_v4", params: [addr, json] }); },
+      });
+      var r = res && res[0];
+      if (!r || (r.code && r.code !== 0)) throw new Error("injective rejected the withdrawal" + (r && r.code ? " (code " + r.code + ")" : ""));
+      msg.className = "msg ok";
+      msg.textContent = "sent — a relayer carries it to ethereum, usually within minutes" + (t.native ? " (it arrives as WETH)" : "") + ". ";
+      msg.appendChild(link("https://explorer.injective.network/transaction/" + r.txHash, "explorer " + String(r.txHash).slice(0, 10) + "…"));
+      if (before !== null) watchArrival(function () { return erc20Balance(t.erc20, account); }, before, amt, "ethereum");
+    }
+
+    // ---- start: a fresh fee on every load, refreshed while a withdrawal is on screen --
+    render();
+    loadFee();
+    setInterval(function () { if (dir === "withdraw" && !busy) loadFee(); }, 20000);
+    setInterval(function () { if (account && !busy) loadBalances(); }, 30000);
+  </script>
+</body>
+</html>

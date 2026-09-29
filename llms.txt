@@ -44,6 +44,7 @@ headings, 300 for body), uppercase `ZZ`-prefixed page names.
 - [ZZXCOMMUNITY](https://zztop.lol/community): hold ZZ, connect a wallet, submit a post to the @zztoplol X account for approval
 - [ZZLATEST](https://zztop.lol/community/latest): queued and already-posted community submissions
 - [ZZAUCTION](https://zztop.lol/auction): authorize the zzauction bot to join Injective's monthly buyback round for you
+- [ZZBRIDGE](https://zztop.lol/bridge): Ethereum ↔ Injective over Peggy for INJ, ETH, USDT and USDC; withdrawals pay the live Ethereum gas cost of relaying, not a flat fee
 
 ## Token
 

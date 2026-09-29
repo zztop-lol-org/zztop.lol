@@ -253,6 +253,7 @@
           <span><span id="feeVal" class="hold" tabindex="0" role="button" title="hold 3 seconds to change" aria-label="relay fee — hold for 3 seconds to change it">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /></span>
         </div>
         <div class="note hidden" id="feeNote"></div>
+        <div class="term hidden" id="totalRow"><span>total</span><span id="total">—</span></div>
         <div class="term"><span>you receive</span><span id="receive">—</span></div>
         <div class="term"><span>to</span><span><span id="dest">connect a wallet</span><button class="reset destchange hidden" id="destChange" type="button">change</button></span></div>
         <div class="destedit hidden" id="destEdit">
@@ -312,7 +313,11 @@
     var account = null, selectedProvider = null, currentName = null, injAddress = null;
     var feeData = null;           // /api/bridge-fee, fetched fresh on every load
     var feeOverride = null;       // BigInt raw, only when the user edited the fee
-    var bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
+    // Max stays max. The fee refreshes every 15s, so a max computed once goes stale the
+    // moment gas moves and would push amount + fee over the balance. While this is on,
+    // every render recomputes the amount as balance − current fee.
+    var maxMode = false;
+    var bal = { eth: {}, weth: 0n, ethNative: null, inj: {}, injGas: 0n };
     var busy = false, sdk = null;
     var BUNDLE = "/lib/bridge.js?v=7c07378bd5";   // rewritten by src/bridge/stamp.mjs on every build
     // Where the funds land. null means the connected wallet itself. Otherwise a 20-byte
@@ -455,7 +460,8 @@
       var t = TOKENS[tokenKey], jobs = [];
       if (dir === "deposit") {
         jobs.push(erc20Balance(t.erc20, account).then(function (b) { bal.eth[tokenKey] = b; }).catch(function () {}));
-        if (t.native) jobs.push(ethRpc("eth_getBalance", [account, "latest"]).then(function (b) { bal.ethNative = BigInt(b); }).catch(function () {}));
+        // every deposit pays its Ethereum gas in ETH, whatever token it carries
+        jobs.push(ethRpc("eth_getBalance", [account, "latest"]).then(function (b) { bal.ethNative = BigInt(b); }).catch(function () {}));
       } else {
         jobs.push(injBalance(injAddress, t.denom).then(function (b) { if (b !== null) bal.inj[tokenKey] = b; }));
         if (tokenKey !== "inj") jobs.push(injBalance(injAddress, "inj").then(function (b) { if (b !== null) bal.injGas = b; }));
@@ -476,6 +482,7 @@
       if (dir === "deposit") {
         if (bal.eth[tokenKey] === undefined) return null;
         if (!t.native) return bal.eth[tokenKey];
+        if (bal.ethNative === null) return null;
         var gp = gasPriceWei() || 3000000000n;
         var reserve = DEPOSIT_GAS * gp * 3n;                  // three sends' worth of margin
         var nat = bal.ethNative > reserve ? bal.ethNative - reserve : 0n;
@@ -501,6 +508,7 @@
       $("avail").textContent = account ? (av === null ? "…" : formatUnits(av, t.dec, 6) + " " + t.sym) : "—";
       [].forEach.call(document.querySelectorAll(".chips button"), function (b) { b.disabled = !account || !av; });
 
+      if (maxMode && av !== null) amountIn.value = av > 0n ? plain(av, t.dec, t.dec) : "";
       var amt = parseUnits(amountIn.value, t.dec);
 
       // fee: only withdrawals pay one. Shown as the ETH it really is, then converted.
@@ -527,6 +535,16 @@
           }
           feeNote.className = "note" + (below ? " warn" : "");
         } else feeNote.textContent = "could not read ethereum gas and prices just now — reload to try again";
+      }
+
+      // amount + fee is what leaves the balance, and it may never be more than the balance
+      var ff = wd ? fee() : null, bb = wd ? bal.inj[tokenKey] : undefined;
+      var showTotal = wd && amt && amt > 0n && ff !== null;
+      $("totalRow").classList.toggle("hidden", !showTotal);
+      if (showTotal) {
+        var tot = amt + ff;
+        $("total").textContent = formatUnits(tot, t.dec, 6) + " " + t.sym + (bb !== undefined ? " of " + formatUnits(bb, t.dec, 6) : "");
+        $("total").style.color = bb !== undefined && tot > bb ? "var(--warn)" : "";
       }
 
       $("receive").textContent = amt ? formatUnits(amt, t.dec, 6) + " " + (wd && t.native ? "WETH" : t.sym) + (wd ? " on Ethereum" : " on Injective") : "—";
@@ -557,9 +575,10 @@
       else if (wd && realFee() === null) label = feeData === null ? "FEE UNAVAILABLE" : "LOADING…";
       else if (!amt || amt <= 0n) label = "ENTER AN AMOUNT";
       else if (av === null) label = "LOADING…";
-      else if (amt > av) label = "NOT ENOUGH " + t.sym;
+      else if (amt > av) label = wd ? "AMOUNT + FEE EXCEED BALANCE" : "NOT ENOUGH " + t.sym;
       else if (wd && fee() !== null && fee() <= 0n) label = "FEE MUST BE ABOVE 0";
       else if (wd && tokenKey !== "inj" && bal.injGas < INJ_TX_FEE) label = "NEED A LITTLE INJ FOR GAS";
+      else if (!wd && !t.native && bal.ethNative !== null && gasPriceWei() && bal.ethNative < DEPOSIT_GAS * gasPriceWei()) label = "NEED ETH FOR GAS";
       else {
         // a custom destination is spelled out on the button itself, so the last thing
         // anyone reads before signing is where the funds are going
@@ -574,23 +593,25 @@
 
     // ---- inputs -------------------------------------------------------------------
     tokenSel.addEventListener("change", function () {
-      tokenKey = tokenSel.value; feeOverride = null; amountIn.value = ""; savePref(); setMsg(""); render(); loadBalances();
+      tokenKey = tokenSel.value; feeOverride = null; amountIn.value = ""; maxMode = false; savePref(); setMsg(""); render(); loadBalances();
     });
     swapBtn.addEventListener("click", function () {
       if (busy) return;
-      dir = dir === "deposit" ? "withdraw" : "deposit"; feeOverride = null; savePref(); setMsg(""); render(); loadBalances();
+      dir = dir === "deposit" ? "withdraw" : "deposit"; feeOverride = null; maxMode = false; amountIn.value = ""; savePref(); setMsg(""); render(); loadBalances();
     });
-    amountIn.addEventListener("input", function () { render(); });
+    amountIn.addEventListener("input", function () { maxMode = false; render(); });
     [].forEach.call(document.querySelectorAll(".chips button"), function (b) {
       b.addEventListener("click", function () {
         var av = available(); if (!av) return;
-        var t = TOKENS[tokenKey];
-        amountIn.value = plain((av * BigInt(b.getAttribute("data-pct"))) / 100n, t.dec, t.dec);
+        var t = TOKENS[tokenKey], pct = BigInt(b.getAttribute("data-pct"));
+        maxMode = pct === 100n;
+        amountIn.value = plain((av * pct) / 100n, t.dec, t.dec);
         render();
       });
     });
     $("avail").addEventListener("click", function () {
       var av = available(); if (!av) return;
+      maxMode = true;
       amountIn.value = plain(av, TOKENS[tokenKey].dec, TOKENS[tokenKey].dec); render();
     });
 
@@ -773,7 +794,7 @@
 
     function showConnected() {
       injAddress = getInjectiveAddress(account);
-      bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };   // nothing carries over between wallets
+      bal = { eth: {}, weth: 0n, ethNative: null, inj: {}, injGas: 0n };   // nothing carries over between wallets
       who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
       connectBtn.classList.add("hidden"); picker.classList.add("hidden"); disconnectBtn.classList.remove("hidden");
       setMsg(""); render(); loadBalances();
@@ -781,7 +802,7 @@
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
       destHex = null; closeDestEditor();
-      bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
+      bal = { eth: {}, weth: 0n, ethNative: null, inj: {}, injGas: 0n };
       who.textContent = ""; disconnectBtn.classList.add("hidden"); picker.classList.add("hidden"); connectBtn.classList.remove("hidden");
       setMsg(""); render();
     }
@@ -949,6 +970,15 @@
     async function withdraw(key, amt) {
       var t = TOKENS[key], f = fee();
       if (f === null || f <= 0n) throw new Error("the relay fee is not available — reload the page");
+      // The rule, enforced at the last moment against a balance read just now: amount +
+      // fee (+ the Injective tx gas when it comes out of the same INJ) may never exceed
+      // what the wallet holds — whatever a fee refresh or another tab did in between.
+      var fresh = await injBalance(injAddress, t.denom);
+      if (fresh === null) throw new Error("could not read your balance just now — try again");
+      bal.inj[key] = fresh;
+      if (amt + f + (key === "inj" ? INJ_TX_FEE : 0n) > fresh)
+        throw new Error("amount + fee (" + formatUnits(amt + f, t.dec, 6) + " " + t.sym + ") is more than your balance (" +
+                        formatUnits(fresh, t.dec, 6) + " " + t.sym + ") — lower the amount");
       await ensureInjective();
       await ensureSigner();
       setMsg("loading…");

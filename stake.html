@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- our own origin and Injective's EVM RPC (reads; every write goes through the wallet) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.evm-rpc.injective.network; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — zzstake</title>
+  <meta name="description" content="Lock ZZTOP for 1, 3, 6 or 12 months and earn ZZTOP, INJ, USDT and USDC every second." />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="canonical" href="https://zztop.lol/stake" />
+  <meta property="og:title" content="zztop — zzstake" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zztop.lol/stake" />
+  <meta property="og:image" content="https://zztop.lol/icons/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
+  <script>
+    /* Cross-document view transitions: same slide + scroll-restoring back as /auction. */
+    (function () {
+      var DIR = "zz_dir", PATH = "zz_path", TTL = 10000;
+      var norm = function (p) {
+        try { p = new URL(p, location.href).pathname; } catch (e) { return p; }
+        return p.length > 1 && p.slice(-1) === "/" ? p.slice(0, -1) : p;
+      };
+      var stack = function () { try { return JSON.parse(sessionStorage.getItem(PATH) || "[]"); } catch (e) { return []; } };
+      var save = function (v) { try { sessionStorage.setItem(PATH, JSON.stringify(v.slice(-10))); } catch (e) {} };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (!a) return;
+        var dir = a.getAttribute("data-dir"), s = stack();
+        try { sessionStorage.setItem(DIR, dir + "|" + Date.now()); } catch (x) {}
+        if (dir === "forward") { s.push(norm(location.pathname)); save(s); return; }
+        if (s.length && s[s.length - 1] === norm(a.getAttribute("href")) && history.length > 1) {
+          s.pop(); save(s); e.preventDefault(); history.back();
+        }
+      }, true);
+      var type = function (nav, clear) {
+        var d = null;
+        try {
+          var v = sessionStorage.getItem(DIR);
+          if (v) {
+            if (clear) sessionStorage.removeItem(DIR);
+            var p = v.split("|");
+            d = (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+          }
+        } catch (e) {}
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
+      });
+    })();
+  </script>
+  <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; --line: rgba(124,255,176,.16); --warn: #ffcf8f; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100dvh; display: flex; flex-direction: column; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
+
+    .topbar { flex: 0 0 auto; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
+    .zzback { display: inline-flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: clamp(1rem, 3.2vw, 1.5rem); letter-spacing: 0.04em; color: var(--green); text-decoration: none; text-shadow: 0 0 0.4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
+    .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
+    main { flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1.4rem; padding: 2rem 1rem 2rem; text-align: center; }
+    .title { font-weight: 800; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
+    .lede { font-weight: 300; font-size: 1.02rem; line-height: 1.6; max-width: 34rem; }
+    .lede p { margin-bottom: .6rem; }
+    .lede .dim { color: var(--dim); }
+
+    /* same card language as /bridge */
+    .card { width: 100%; max-width: 34rem; border: 1px solid var(--line); border-radius: .7rem; padding: 1.1rem; display: flex; flex-direction: column; gap: .75rem; background: rgba(124,255,176,.02); text-align: left; }
+    .head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    .lbl { font-weight: 300; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+    .big { font-weight: 800; font-size: clamp(1.4rem, 6vw, 1.9rem); line-height: 1.1; overflow-wrap: anywhere; }
+    .sub { font-weight: 300; font-size: .85rem; color: var(--dim); }
+    .sub b { color: var(--green); font-weight: 800; }
+    .statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .box { border: 1px solid var(--line); border-radius: .55rem; padding: .7rem .85rem; display: flex; flex-direction: column; gap: .3rem; min-width: 0; background: rgba(0,0,0,.25); }
+
+    .ico { width: 1.25em; height: 1.25em; flex: none; display: block; border-radius: 50%; }
+    .ico.blank { border: 1px solid var(--dim); }
+    .rows { display: flex; flex-direction: column; gap: .45rem; }
+    .row { display: flex; align-items: center; gap: .55rem; font-size: .95rem; }
+    .row .sym { font-weight: 800; min-width: 3.6em; }
+    .row .v { margin-left: auto; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .row .v.dim, .dimtxt { color: var(--dim); }
+
+    .amount { border: 1px solid var(--line); border-radius: .55rem; padding: .8rem .85rem; display: flex; flex-direction: column; gap: .55rem; background: rgba(0,0,0,.25); }
+    .amhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .2rem .8rem; }
+    .amhead .avail { margin-left: auto; text-align: right; }
+    .avail { font-weight: 300; font-size: .8rem; color: var(--dim); }
+    .avail b { color: var(--green); font-weight: 800; }
+    .amrow { display: flex; align-items: center; gap: .6rem; }
+    .amrow input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--green); font-family: inherit; font-weight: 800; font-size: clamp(1.15rem, 6vw, 1.9rem); outline: none; }
+    .amrow input::placeholder { color: var(--dim); }
+    .amrow .sym { font-weight: 800; font-size: 1.05rem; }
+    .amrow .ico { width: 1.15rem; height: 1.15rem; }
+    .chips { display: flex; gap: .4rem; }
+    .chips button { flex: 1; font-family: inherit; font-weight: 800; font-size: .75rem; letter-spacing: .04em; color: var(--dim); background: transparent; border: 1px solid var(--line); border-radius: .35rem; padding: .4em 0; cursor: pointer; }
+    .chips button:hover:not(:disabled) { color: var(--green); border-color: var(--green); }
+    .chips button:disabled { opacity: .4; cursor: default; }
+
+    /* lock length: four choices, the multiplier under each */
+    .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45rem; }
+    .tier { font-family: inherit; color: var(--dim); background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: .55rem; padding: .6rem .3rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: .15rem; transition: border-color .15s, color .15s, box-shadow .15s; }
+    .tier b { font-weight: 800; font-size: .95rem; letter-spacing: .02em; }
+    .tier span { font-weight: 800; font-size: .85rem; letter-spacing: .02em; opacity: .8; }
+    .tier:hover { color: var(--green); }
+    .tier[aria-checked="true"] { color: var(--green); border-color: var(--green); box-shadow: 0 0 .9em rgba(124,255,176,.2); }
+    @media (max-width: 420px) { .tiers { grid-template-columns: repeat(2, 1fr); } .statgrid { grid-template-columns: 1fr; } }
+
+    .terms { display: flex; flex-direction: column; gap: .45rem; font-weight: 300; font-size: .9rem; padding: .15rem .1rem; }
+    .term { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+    .term > span:first-child { color: var(--dim); white-space: nowrap; }
+    .term > span:last-child { text-align: right; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem; }
+    .note { font-weight: 300; font-size: .78rem; line-height: 1.5; color: var(--dim); }
+    .note.warn { color: var(--warn); }
+
+    .go { width: 100%; font-weight: 800; font-size: 1.1rem; letter-spacing: .02em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .8em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
+    .go:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+    .small { font-family: inherit; font-weight: 800; font-size: .78rem; letter-spacing: .04em; color: var(--green); background: transparent; border: 1px solid var(--green); border-radius: .4rem; padding: .35em .8em; cursor: pointer; flex: none; }
+    .small:hover:not(:disabled) { background: var(--green); color: #0a0a0f; }
+    .small:disabled { opacity: .35; cursor: not-allowed; }
+
+    .pos { border: 1px solid var(--line); border-radius: .55rem; padding: .7rem .85rem; display: flex; align-items: center; gap: .8rem; background: rgba(0,0,0,.25); }
+    .pos .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+    .pos .amt { font-weight: 800; overflow-wrap: anywhere; }
+    .pos .meta { font-weight: 300; font-size: .8rem; color: var(--dim); }
+    .pos .meta b { color: var(--green); font-weight: 800; }
+
+    .msg { font-weight: 300; font-size: .9rem; min-height: 1.4em; color: var(--dim); overflow-wrap: anywhere; text-align: center; line-height: 1.5; }
+    .msg.err { color: #ff8f8f; }
+    .msg.ok { color: var(--green); }
+    .msg a { color: var(--green); }
+    .hidden { display: none !important; }
+
+    .connect { font-weight: 800; font-size: 1.2rem; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .6em 1.1em; box-shadow: 0 0 1.4em rgba(124,255,176,.3); cursor: pointer; font-family: inherit; }
+    .who { font-weight: 300; font-size: .85rem; color: var(--dim); word-break: break-all; min-height: 1.2em; }
+    .picker { display: flex; flex-direction: column; gap: .6rem; }
+    .picker button { display: flex; align-items: center; gap: .7rem; justify-content: center; font-family: inherit; font-weight: 800; font-size: 1rem; color: var(--green); background: transparent; border: 2px solid var(--green); border-radius: .5rem; padding: .6em 1em; cursor: pointer; }
+    .picker button:hover { background: var(--green); color: #0a0a0f; }
+    .picker img { width: 1.4em; height: 1.4em; border-radius: .3em; }
+    .disconnect { background: transparent; border: 0; color: var(--dim); font-family: inherit; font-weight: 300; font-size: .85rem; text-decoration: underline; cursor: pointer; }
+    .disconnect:hover { color: var(--green); }
+    .walletbar { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: 1rem 1rem 1.8rem; }
+    .walletbar .who { max-width: 90vw; }
+    /* the stake card's button connects; the footer keeps the picker and the address */
+    #connect { display: none !important; }
+    .foot { font-weight: 300; font-size: .8rem; color: var(--dim); max-width: 34rem; line-height: 1.6; }
+    .foot a { color: var(--dim); }
+
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
+    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
+    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
+    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
+    html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
+    html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
+    html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+    @media (prefers-reduced-motion: reduce) { .swap { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/" id="zzback" data-dir="back">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span>ZZBACK</span>
+    </a>
+  </header>
+  <main>
+    <h1 class="title">ZZSTAKE</h1>
+    <div class="lede">
+      <p>lock zztop. earn zztop, inj, usdt and usdc — every second, claim whenever.</p>
+      <p class="dim">1, 3, 6 or 12 months. the longer the lock, the bigger your share. no early exit.</p>
+    </div>
+
+    <section class="card" id="stats" aria-label="staking totals">
+      <div class="statgrid">
+        <div class="box"><span class="lbl">locked</span><span class="big" id="locked">…</span><span class="sub" id="lockedSub">ZZTOP</span></div>
+        <div class="box"><span class="lbl">of supply</span><span class="big" id="pct">…</span><span class="sub" id="supplySub">&nbsp;</span></div>
+      </div>
+      <div class="head"><span class="lbl">streaming now</span><span class="sub" id="roundEnds"></span></div>
+      <div class="rows" id="streams"><div class="row"><span class="v dim">…</span></div></div>
+    </section>
+
+    <section class="card" id="card" aria-label="stake">
+      <div class="amount">
+        <div class="amhead">
+          <label class="lbl" for="amount">amount</label>
+          <span class="avail">available <b id="avail">—</b></span>
+        </div>
+        <div class="amrow">
+          <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="amount of ZZTOP to lock" />
+          <img class="ico" src="/icons/tokens/zztop.svg" alt="" width="32" height="32" /><span class="sym">ZZTOP</span>
+        </div>
+        <div class="chips">
+          <button type="button" data-pct="25">25%</button>
+          <button type="button" data-pct="50">50%</button>
+          <button type="button" data-pct="75">75%</button>
+          <button type="button" data-pct="100">100%</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl" id="tiersLbl" style="margin-bottom:.45rem">lock for</div>
+        <div class="tiers" id="tiers" role="radiogroup" aria-labelledby="tiersLbl"></div>
+      </div>
+
+      <div class="terms">
+        <div class="term"><span>unlocks</span><span id="unlocks">—</span></div>
+        <div class="term"><span>your weight</span><span id="weight">—</span></div>
+        <div class="term"><span>your share of rewards</span><span id="share">—</span></div>
+        <div class="rows hidden" id="perDay"></div>
+      </div>
+      <p class="note warn" id="lockWarn"></p>
+
+      <button class="go" id="go" type="button">CONNECT WALLET</button>
+      <p class="msg" id="msg"></p>
+    </section>
+
+    <section class="card hidden" id="rewardsCard" aria-label="your rewards">
+      <div class="head"><span class="lbl">your rewards</span><span class="sub" id="myShare"></span></div>
+      <div class="rows" id="myRewards"></div>
+      <button class="go" id="claim" type="button" disabled>CLAIM</button>
+      <div class="row hidden" id="winjRow">
+        <img class="ico" src="/icons/tokens/inj.svg" alt="" width="32" height="32" />
+        <span class="note">you hold <b id="winjBal"></b> WINJ — wrapped INJ, 1:1</span>
+        <button class="small" id="unwrap" type="button" style="margin-left:auto">UNWRAP</button>
+      </div>
+    </section>
+
+    <section class="card hidden" id="posCard" aria-label="your locks">
+      <div class="head"><span class="lbl">your locks</span><span class="sub" id="myPrincipal"></span></div>
+      <div class="rows" id="positions"></div>
+      <p class="note">rewards split by weight: amount × multiplier. once a lock ends, withdraw whenever — until then it keeps earning, and anyone can drop an ended lock back to 1×.</p>
+    </section>
+
+    <p class="foot">contract <a id="contractLink" target="_blank" rel="noopener noreferrer"></a> on injective evm · verified source · fork of curve's multirewards</p>
+  </main>
+
+  <footer class="walletbar" id="walletbar">
+    <button class="connect" id="connect">CONNECT WALLET</button>
+    <div class="picker hidden" id="picker"></div>
+    <div class="who" id="who"></div>
+    <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
+  </footer>
+
+  <script>
+    // ---- config -------------------------------------------------------------------
+    var STAKING = "0xfba18A6f1234c014DDc6DA32163843B70D1dBF30";   // ZZStaking, verified on blockscout
+    var ZZTOP = "0x12e7Bf54E22939714Ad2BeAD9A2F7A7CecAEFfC4";
+    var WINJ = "0x0000000088827d2d103ee2d9A6b781773AE03FfB";
+    var RPC = "https://sentry.evm-rpc.injective.network/";
+    var EXPLORER = "https://blockscout.injective.network";
+    var EVM_CHAIN_HEX = "0x6f0";                                     // Injective EVM, 1776
+    // Reward tokens are read from the contract; these just give the known ones a face.
+    var KNOWN = {};
+    KNOWN[ZZTOP.toLowerCase()] = { sym: "ZZTOP", dec: 18, icon: "/icons/tokens/zztop.svg" };
+    KNOWN[WINJ.toLowerCase()] = { sym: "WINJ", dec: 18, icon: "/icons/tokens/inj.svg" };
+    KNOWN["0x88f7f2b685f9692caf8c478f5badf09ee9b1cc13"] = { sym: "USDT", dec: 6, icon: "/icons/tokens/usdt.svg" };
+    KNOWN["0xa00c59ff5a080d2b954d0c75e46e22a0c371235a"] = { sym: "USDC", dec: 6, icon: "/icons/tokens/usdc.svg" };
+    // Mirrors ZZStaking.tierParams — the contract is the authority, this is the menu.
+    var TIERS = [
+      { days: 30,  label: "1 MONTH",   short: "1 month",   mult: "1×",   bps: 10000n },
+      { days: 90,  label: "3 MONTHS",  short: "3 months",  mult: "1.5×", bps: 15000n },
+      { days: 180, label: "6 MONTHS",  short: "6 months",  mult: "2×",   bps: 20000n },
+      { days: 365, label: "12 MONTHS", short: "12 months", mult: "3×",   bps: 30000n },
+    ];
+    var P36 = 10n ** 36n;
+    var GAS_MIN = 100000000000000n;   // 0.0001 INJ; a stake is ~300k gas at 0.16 gwei ≈ 0.00005
+    var REFRESH_MS = 15000;
+    var SEL = {
+      totalSupply: "0x18160ddd", totalPrincipal: "0x4b1533b2", balanceOf: "0x70a08231", principalOf: "0x61e20a1c",
+      earned: "0x211dc32d", rewardData: "0x48e5d9f8", rewardTokens: "0x7bb7bed1", positionsOf: "0xf867d46b",
+      stake: "0x10087fb1", withdraw: "0x2e1a7d4d", getRewardFor: "0xa5b8dec0", allowance: "0xdd62ed3e",
+      approve: "0x095ea7b3", symbol: "0x95d89b41", decimals: "0x313ce567", paused: "0x5c975abb",
+    };
+    var ERRORS = {
+      "0x94a3841e": "that lock hasn't ended yet", "0x1f2a2005": "enter an amount above zero",
+      "0xd93c0665": "staking is paused right now — withdrawals and claims still work",
+      "0x06250401": "that amount is too large", "0xe1423617": "pick a lock length",
+      "0x6507689f": "that lock was already withdrawn", "0xe450d38c": "not enough ZZTOP in the wallet",
+    };
+
+    var $ = function (id) { return document.getElementById(id); };
+    var amountIn = $("amount"), goBtn = $("go"), msg = $("msg"), claimBtn = $("claim"),
+        connectBtn = $("connect"), picker = $("picker"), who = $("who"), disconnectBtn = $("disconnect");
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
+
+    // ---- state --------------------------------------------------------------------
+    var account = null, selectedProvider = null, currentName = null, busy = false;
+    var tier = 3, maxMode = false;
+    try { var pref = JSON.parse(localStorage.getItem("zz_stake") || "{}"); if (pref.tier >= 0 && pref.tier <= 3) tier = pref.tier; } catch (e) {}
+    function savePref() { try { localStorage.setItem("zz_stake", JSON.stringify({ tier: tier })); } catch (e) {} }
+    // G: the contract, for everyone. U: the connected wallet. Both read over plain RPC.
+    var G = null, U = null, skew = 0;
+    var chainNow = function () { return Math.floor(Date.now() / 1000 + skew); };
+
+    // ---- units --------------------------------------------------------------------
+    function parseUnits(s, dec) {
+      s = String(s || "").trim().replace(",", ".");
+      if (!/^\d*\.?\d*$/.test(s) || s === "" || s === ".") return null;
+      var parts = s.split("."), whole = parts[0] || "0", frac = (parts[1] || "");
+      if (frac.length > dec) frac = frac.slice(0, dec);
+      return BigInt(whole) * 10n ** BigInt(dec) + BigInt((frac + "0".repeat(dec)).slice(0, dec) || "0");
+    }
+    function formatUnits(raw, dec, shown) {
+      if (raw === null || raw === undefined) return "—";
+      var neg = raw < 0n; if (neg) raw = -raw;
+      var s = raw.toString().padStart(dec + 1, "0");
+      var whole = s.slice(0, s.length - dec), frac = s.slice(s.length - dec).slice(0, shown === undefined ? 6 : shown).replace(/0+$/, "");
+      return (neg ? "-" : "") + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (frac ? "." + frac : "");
+    }
+    var plain = function (raw, dec, shown) { return formatUnits(raw, dec, shown).replace(/,/g, ""); };
+    // a readable amount: whole tokens for big numbers, more decimals as they shrink
+    function nice(raw, dec) {
+      var one = 10n ** BigInt(dec);
+      return formatUnits(raw, dec, raw >= 1000n * one ? 0 : raw >= one ? 2 : 6);
+    }
+    function pctStr(num, den) {
+      if (!den) return "—";
+      var bp = num * 1000000n / den;                       // 1e-4 %
+      var s = (Number(bp) / 10000);
+      return (s > 0 && s < 0.01 ? "<0.01" : s.toFixed(2)) + "%";
+    }
+    var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    function dateStr(ts) { var d = new Date(ts * 1000); return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear(); }
+    function span(sec) {
+      sec = Math.max(0, Math.floor(sec));
+      var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+      return d ? d + "d " + h + "h" : h ? h + "h " + m + "m" : m + "m " + s + "s";
+    }
+
+    // ---- abi (hand-encoded: a dozen static calls do not need a library) ------------
+    var w32 = function (n) { return BigInt(n).toString(16).padStart(64, "0"); };
+    var a32 = function (a) { return a.toLowerCase().replace(/^0x/, "").padStart(64, "0"); };
+    function words(hex) {
+      hex = String(hex || "").replace(/^0x/, ""); var r = [];
+      for (var i = 0; i + 64 <= hex.length; i += 64) r.push(BigInt("0x" + hex.slice(i, i + 64)));
+      return r;
+    }
+    var asAddr = function (w) { return "0x" + w.toString(16).padStart(40, "0"); };
+    function asString(hex) {
+      var w = words(hex); if (w.length < 2) return "";
+      var len = Number(w[1]), body = String(hex).replace(/^0x/, "").slice(128, 128 + len * 2), out = "";
+      for (var i = 0; i < body.length; i += 2) out += String.fromCharCode(parseInt(body.substr(i, 2), 16));
+      try { return decodeURIComponent(escape(out)); } catch (e) { return out; }
+    }
+
+    // ---- rpc: one batched POST per refresh -----------------------------------------
+    async function batch(reqs) {
+      var body = reqs.map(function (r, i) { return { jsonrpc: "2.0", id: i, method: r[0], params: r[1] }; });
+      var res = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error("rpc " + res.status);
+      var j = await res.json(), out = [];
+      if (!Array.isArray(j)) throw new Error("rpc: bad batch reply");
+      j.forEach(function (x) { out[x.id] = x; });
+      return out;
+    }
+    var call = function (to, data) { return ["eth_call", [{ to: to, data: data }, "latest"]]; };
+    function ok(r) { if (!r || r.error || typeof r.result !== "string") throw new Error((r && r.error && r.error.message) || "rpc call failed"); return r.result; }
+
+    var tokenList = null;   // [{ addr, sym, dec, icon }]
+    async function loadTokens() {
+      var reqs = []; for (var i = 0; i < 8; i++) reqs.push(call(STAKING, SEL.rewardTokens + w32(i)));
+      var r = await batch(reqs), list = [];
+      for (var k = 0; k < 8; k++) {
+        if (!r[k] || r[k].error || !r[k].result || r[k].result === "0x") break;   // past the end
+        list.push(asAddr(words(r[k].result)[0]));
+      }
+      var unknown = list.filter(function (a) { return !KNOWN[a.toLowerCase()]; });
+      if (unknown.length) {
+        var q = []; unknown.forEach(function (a) { q.push(call(a, SEL.symbol), call(a, SEL.decimals)); });
+        var m = await batch(q);
+        unknown.forEach(function (a, i) {
+          KNOWN[a.toLowerCase()] = { sym: asString(ok(m[2 * i])) || a.slice(0, 8), dec: Number(words(ok(m[2 * i + 1]))[0]), icon: null };
+        });
+      }
+      tokenList = list.map(function (a) { var k = KNOWN[a.toLowerCase()]; return { addr: a, sym: k.sym, dec: k.dec, icon: k.icon }; });
+    }
+
+    async function loadGlobal() {
+      if (!tokenList) await loadTokens();
+      var reqs = [
+        call(STAKING, SEL.totalSupply), call(STAKING, SEL.totalPrincipal), call(ZZTOP, SEL.totalSupply),
+        call(STAKING, SEL.paused), ["eth_getBlockByNumber", ["latest", false]],
+      ];
+      tokenList.forEach(function (t) { reqs.push(call(STAKING, SEL.rewardData + a32(t.addr))); });
+      var r = await batch(reqs);
+      var blockTs = Number(ok(r[4] && r[4].result ? { result: r[4].result.timestamp } : r[4]));
+      skew = blockTs - Date.now() / 1000;
+      var g = {
+        weight: words(ok(r[0]))[0], principal: words(ok(r[1]))[0], supply: words(ok(r[2]))[0],
+        paused: words(ok(r[3]))[0] !== 0n, rd: {},
+      };
+      tokenList.forEach(function (t, i) {
+        var w = words(ok(r[5 + i]));
+        g.rd[t.addr] = { duration: w[1], finish: Number(w[2]), rate: w[3] };
+      });
+      G = g;
+    }
+
+    async function loadUser() {
+      if (!account) { U = null; return; }
+      var me = account;
+      var reqs = [
+        call(ZZTOP, SEL.balanceOf + a32(me)), call(ZZTOP, SEL.allowance + a32(me) + a32(STAKING)),
+        ["eth_getBalance", [me, "latest"]], call(WINJ, SEL.balanceOf + a32(me)),
+        call(STAKING, SEL.balanceOf + a32(me)), call(STAKING, SEL.principalOf + a32(me)),
+        call(STAKING, SEL.positionsOf + a32(me)),
+      ];
+      tokenList.forEach(function (t) { reqs.push(call(STAKING, SEL.earned + a32(me) + a32(t.addr))); });
+      var r = await batch(reqs);
+      if (me !== account) return;                           // wallet switched while this was in flight
+      var pw = words(ok(r[6])), n = Number(pw[1] || 0n), pos = [];
+      for (var i = 0; i < n; i++) {
+        var b = 2 + i * 4;
+        pos.push({ id: i, amount: pw[b], weight: pw[b + 1], unlockAt: Number(pw[b + 2]), tier: Number(pw[b + 3]) });
+      }
+      var u = {
+        zz: words(ok(r[0]))[0], allowance: words(ok(r[1]))[0], inj: BigInt(ok(r[2])), winj: words(ok(r[3]))[0],
+        weight: words(ok(r[4]))[0], principal: words(ok(r[5]))[0], positions: pos, earned: {}, at: chainNow(),
+      };
+      tokenList.forEach(function (t, i) { u.earned[t.addr] = words(ok(r[7 + i]))[0]; });
+      U = u;
+    }
+
+    var refreshTimer = null, loadErr = false;
+    async function refresh() {
+      clearTimeout(refreshTimer);
+      try { await loadGlobal(); await loadUser(); loadErr = false; }
+      catch (e) { loadErr = true; }
+      render();
+      if (!document.hidden) refreshTimer = setTimeout(refresh, REFRESH_MS);
+    }
+    document.addEventListener("visibilitychange", function () { if (document.hidden) clearTimeout(refreshTimer); else refresh(); });
+
+    // ---- rewards maths, as the contract does it (rates are scaled by 1e36) ----------
+    function active(t, now) { var d = G.rd[t.addr]; return d && d.rate > 0n && now < d.finish; }
+    function perDay(t) { return G.rd[t.addr].rate * 86400n / P36; }        // the whole pool's stream
+    // earned right now: what the contract said at `U.at`, plus this wallet's share of
+    // the stream since — so the numbers move every second between refreshes
+    function earnedNow(t, now) {
+      var base = U.earned[t.addr] || 0n, d = G.rd[t.addr];
+      if (!d || !G.weight || !U.weight) return base;
+      var dt = BigInt(Math.max(0, Math.min(now, d.finish) - U.at));
+      return base + U.weight * d.rate * dt / G.weight / P36;
+    }
+
+    // ---- render -------------------------------------------------------------------
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+    function tokenRow(t, value, valueCls) {
+      var row = el("div", "row");
+      if (t.icon) { var im = el("img", "ico"); im.src = t.icon; im.alt = ""; im.width = 32; im.height = 32; row.appendChild(im); }
+      else row.appendChild(el("span", "ico blank"));     // a reward token added later, without a logo here
+      row.appendChild(el("span", "sym", t.sym));
+      var v = el("span", "v" + (valueCls ? " " + valueCls : ""), value); row.appendChild(v);
+      return { row: row, v: v };
+    }
+
+    function renderStats() {
+      if (!G) { if (loadErr) $("locked").textContent = "—"; return; }
+      $("locked").textContent = nice(G.principal, 18);
+      $("pct").textContent = pctStr(G.principal, G.supply);
+      $("supplySub").textContent = "of " + formatUnits(G.supply, 18, 0) + " ZZTOP";
+      var now = chainNow(), box = $("streams"); box.innerHTML = "";
+      var live = tokenList.filter(function (t) { return active(t, now); });
+      if (!live.length) {
+        var r = el("div", "row"); r.appendChild(el("span", "v dim", "no reward round running right now"));
+        r.firstChild.style.marginLeft = "0"; r.firstChild.style.textAlign = "left"; box.appendChild(r);
+        $("roundEnds").textContent = "";
+      } else {
+        live.forEach(function (t) { box.appendChild(tokenRow(t, nice(perDay(t), t.dec) + " / day").row); });
+        var end = Math.max.apply(null, live.map(function (t) { return G.rd[t.addr].finish; }));
+        $("roundEnds").textContent = "round ends " + dateStr(end);
+      }
+    }
+
+    function stakeAmount() {
+      if (maxMode && U) return U.zz;
+      var v = parseUnits(amountIn.value, 18);
+      return v;
+    }
+
+    function renderTiers() {
+      var box = $("tiers");
+      if (!box.children.length) {
+        TIERS.forEach(function (T, i) {
+          var b = el("button", "tier"); b.type = "button"; b.setAttribute("role", "radio");
+          b.appendChild(el("b", null, T.label));
+          b.appendChild(el("span", null, T.mult));
+          b.setAttribute("aria-label", T.short + ", " + T.mult + " weight");
+          b.addEventListener("click", function () { tier = i; savePref(); render(); });
+          box.appendChild(b);
+        });
+      }
+      [].forEach.call(box.children, function (b, i) { b.setAttribute("aria-checked", i === tier ? "true" : "false"); b.tabIndex = i === tier ? 0 : -1; });
+    }
+
+    function renderStake() {
+      renderTiers();
+      var T = TIERS[tier], amt = stakeAmount(), now = chainNow();
+      if (maxMode && U) amountIn.value = plain(U.zz, 18, 6);
+      $("avail").textContent = U ? formatUnits(U.zz, 18, 2) + " ZZTOP" : "—";
+      var unlock = now + T.days * 86400;
+      $("unlocks").textContent = dateStr(unlock) + " · in " + T.days + " days";
+      var wNew = amt ? amt * T.bps / 10000n : 0n;
+      $("weight").textContent = amt ? formatUnits(wNew, 18, 2) + " (" + T.mult + ")" : T.mult + " the amount";
+      var pd = $("perDay"); pd.innerHTML = "";
+      if (G && amt && amt > 0n) {
+        var mine = wNew + (U ? U.weight : 0n), total = G.weight + wNew;
+        $("share").textContent = pctStr(mine, total) + (U && U.weight ? " (with your other locks)" : "");
+        var live = tokenList.filter(function (t) { return active(t, now); });
+        live.forEach(function (t) { pd.appendChild(tokenRow(t, "≈ " + nice(perDay(t) * mine / total, t.dec) + " / day", "dim").row); });
+        pd.classList.toggle("hidden", !live.length);
+      } else { $("share").textContent = "—"; pd.classList.add("hidden"); }
+      $("lockWarn").textContent = amt && amt > 0n
+        ? "locked until " + dateStr(unlock) + ". there is no early exit — not even for the team."
+        : "";
+
+      var label, dis = false, go = null;
+      if (!account) { label = "CONNECT WALLET"; go = openPicker; }
+      else if (!G || !U) { label = loadErr ? "CAN'T REACH INJECTIVE — RETRYING" : "LOADING…"; dis = true; }
+      else if (G.paused) { label = "STAKING IS PAUSED"; dis = true; }
+      else if (amt === null || amt <= 0n) { label = "ENTER AN AMOUNT"; dis = true; }
+      else if (amt > U.zz) { label = "NOT ENOUGH ZZTOP"; dis = true; }
+      else if (U.inj < GAS_MIN) { label = "NEED A LITTLE INJ FOR GAS"; dis = true; }
+      else { label = "LOCK FOR " + T.label; go = doStake; }
+      if (busy) { dis = true; }
+      goBtn.textContent = label; goBtn.disabled = dis; goBtn.onclick = go;
+      [].forEach.call(document.querySelectorAll(".chips button"), function (b) { b.disabled = !U || U.zz === 0n; });
+    }
+
+    var rewardVals = [];
+    function renderRewards() {
+      var card = $("rewardsCard");
+      if (!U || !G) { card.classList.add("hidden"); return; }
+      card.classList.remove("hidden");
+      $("myShare").textContent = U.weight ? "share " + pctStr(U.weight, G.weight) : "";
+      var box = $("myRewards"); box.innerHTML = ""; rewardVals = [];
+      tokenList.forEach(function (t) {
+        var r = tokenRow(t, "0"); box.appendChild(r.row); rewardVals.push({ t: t, v: r.v });
+      });
+      tickRewards();
+      var w = $("winjRow");
+      if (U.winj > 0n) { $("winjBal").textContent = nice(U.winj, 18); w.classList.remove("hidden"); } else w.classList.add("hidden");
+    }
+    function tickRewards() {
+      if (!U || !G) return;
+      var now = chainNow(), any = false;
+      rewardVals.forEach(function (x) {
+        var v = earnedNow(x.t, now); if (v > 0n) any = true;
+        x.v.textContent = formatUnits(v, x.t.dec, 6);
+        x.v.classList.toggle("dim", v === 0n);
+      });
+      claimBtn.disabled = busy || !any;
+    }
+
+    function renderPositions() {
+      var card = $("posCard"), box = $("positions");
+      var open = U ? U.positions.filter(function (p) { return p.amount > 0n; }) : [];
+      if (!U || !open.length) { card.classList.add("hidden"); return; }
+      card.classList.remove("hidden");
+      $("myPrincipal").textContent = nice(U.principal, 18) + " ZZTOP locked";
+      box.innerHTML = "";
+      var now = chainNow();
+      open.sort(function (a, b) { return a.unlockAt - b.unlockAt; }).forEach(function (p) {
+        var T = TIERS[p.tier] || TIERS[0], row = el("div", "pos"), what = el("div", "what");
+        what.appendChild(el("span", "amt", nice(p.amount, 18) + " ZZTOP"));
+        var mult = p.weight === p.amount ? "1×" : T.mult;
+        var meta = el("span", "meta");
+        meta.appendChild(document.createTextNode(T.short + " · "));
+        meta.appendChild(el("b", null, mult));
+        var ended = now >= p.unlockAt;
+        var when = el("span", "when"); when.dataset.unlock = p.unlockAt;
+        when.textContent = ended ? " · ended " + dateStr(p.unlockAt) : " · unlocks " + dateStr(p.unlockAt) + ", in " + span(p.unlockAt - now);
+        meta.appendChild(when);
+        what.appendChild(meta); row.appendChild(what);
+        if (ended) {
+          var b = el("button", "small", "WITHDRAW"); b.type = "button"; b.disabled = busy;
+          b.addEventListener("click", function () { doWithdraw(p); });
+          row.appendChild(b);
+        }
+        box.appendChild(row);
+      });
+    }
+    function tickPositions() {
+      var now = chainNow(), stale = false;
+      [].forEach.call(document.querySelectorAll("#positions .when"), function (w) {
+        var at = Number(w.dataset.unlock);
+        if (now >= at) stale = true; else w.textContent = " · unlocks " + dateStr(at) + ", in " + span(at - now);
+      });
+      if (stale) renderPositions();                      // a lock just ended: show WITHDRAW
+    }
+
+    function render() { renderStats(); renderStake(); renderRewards(); renderPositions(); }
+    setInterval(function () { if (!document.hidden) { tickRewards(); tickPositions(); } }, 1000);
+
+    // ---- inputs -------------------------------------------------------------------
+    amountIn.addEventListener("input", function () { maxMode = false; renderStake(); });
+    [].forEach.call(document.querySelectorAll(".chips button"), function (b) {
+      b.addEventListener("click", function () {
+        if (!U) return;
+        var pct = BigInt(b.dataset.pct);
+        maxMode = pct === 100n;                           // 100% stakes the exact balance at send time
+        amountIn.value = plain(U.zz * pct / 100n, 18, 6); // shown to 6 places, rounded down
+        renderStake();
+      });
+    });
+    $("tiers").addEventListener("keydown", function (e) {
+      var d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault(); tier = (tier + d + 4) % 4; savePref(); renderStake(); $("tiers").children[tier].focus();
+    });
+
+    // ---- wallet (same connect flow as /bridge and /auction) ------------------------
+    var discovered = {};
+    window.addEventListener("eip6963:announceProvider", function (e) {
+      var d = e.detail; if (d && d.info && d.provider) discovered[d.info.rdns || d.info.uuid || d.info.name] = d;
+    });
+    function requestProviders() { window.dispatchEvent(new Event("eip6963:requestProvider")); }
+    requestProviders();
+    function providerList() {
+      var list = Object.keys(discovered).map(function (k) { return discovered[k]; });
+      if (!list.length && window.ethereum) {
+        var e = window.ethereum;
+        list = [{ info: { name: e.isRabby ? "Rabby" : e.isMetaMask ? "MetaMask" : e.isKeplr ? "Keplr" : "Injected wallet" }, provider: e }];
+      }
+      return list;
+    }
+    var STORE = "zz_wallet";
+    function saveWallet(id) { try { localStorage.setItem(STORE, id || ""); } catch (e) {} }
+    function loadWallet() { try { return localStorage.getItem(STORE); } catch (e) { return null; } }
+    function forgetWallet() { try { localStorage.removeItem(STORE); } catch (e) {} }
+
+    function showConnected() {
+      U = null; maxMode = false; amountIn.value = "";          // nothing carries over between wallets
+      who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
+      connectBtn.classList.add("hidden"); picker.classList.add("hidden"); disconnectBtn.classList.remove("hidden");
+      setMsg(""); render(); refresh();
+    }
+    function resetConnection() {
+      account = null; selectedProvider = null; currentName = null; U = null; forgetWallet();
+      who.textContent = ""; disconnectBtn.classList.add("hidden"); picker.classList.add("hidden"); connectBtn.classList.remove("hidden");
+      setMsg(""); render();
+    }
+    function bindAccountEvents(prov) {
+      if (prov && prov.on && !prov.__zzBound) {
+        prov.__zzBound = true;
+        prov.on("accountsChanged", function (a) {
+          if (!a || !a.length) { resetConnection(); return; }
+          if (account && String(a[0]).toLowerCase() === account.toLowerCase()) return;
+          account = a[0]; showConnected();
+        });
+      }
+    }
+    function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
+    async function connectWith(entry, silent) {
+      try {
+        // one request per gesture: a second one breaks Brave's mobile in-app browser
+        var a = await entry.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" });
+        if (!a || !a.length) { if (!silent) { setMsg("no account authorized", "err"); backToConnect(); } return false; }
+        account = a[0]; selectedProvider = entry.provider; currentName = entry.info.name || "wallet";
+        saveWallet(entry.info.rdns || entry.info.name || ""); bindAccountEvents(entry.provider); showConnected();
+        return true;
+      } catch (e) { if (!silent) { setMsg("connection cancelled", "err"); backToConnect(); } return false; }
+    }
+    async function openPicker() {
+      requestProviders(); await sleep(400);
+      var list = providerList();
+      if (!list.length) { setMsg("no wallet found — install MetaMask, Rabby, or enable Keplr EVM", "err"); return; }
+      picker.innerHTML = "";
+      list.forEach(function (entry) {
+        var b = document.createElement("button");
+        if (entry.info.icon) { var im = document.createElement("img"); im.src = entry.info.icon; im.alt = ""; b.appendChild(im); }
+        var s = document.createElement("span"); s.textContent = entry.info.name || "wallet"; b.appendChild(s);
+        b.addEventListener("click", function () { connectWith(entry); });
+        picker.appendChild(b);
+      });
+      connectBtn.classList.add("hidden"); picker.classList.remove("hidden");
+      setMsg("choose a wallet");
+      picker.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    connectBtn.addEventListener("click", openPicker);
+    disconnectBtn.addEventListener("click", resetConnection);
+    (async function restore() {
+      var id = loadWallet(); if (!id) return;
+      requestProviders(); await sleep(300);
+      var list = providerList();
+      var entry = list.filter(function (e) { return (e.info.rdns || e.info.name) === id; })[0] || (list.length === 1 ? list[0] : null);
+      if (entry) await connectWith(entry, true);
+    })();
+
+    // ---- sending ------------------------------------------------------------------
+    async function ensureInjective() {
+      var cur;
+      try { cur = await selectedProvider.request({ method: "eth_chainId" }); } catch (e) { return; }
+      if (String(cur).toLowerCase() === EVM_CHAIN_HEX) return;
+      setMsg("switching your wallet to Injective…");
+      try { await selectedProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: EVM_CHAIN_HEX }] }); }
+      catch (e) {
+        var unknown = e && (e.code === 4902 || /unrecognized|not added|unsupported chain/i.test(e.message || ""));
+        if (!unknown) throw e;
+        await selectedProvider.request({ method: "wallet_addEthereumChain", params: [{
+          chainId: EVM_CHAIN_HEX, chainName: "Injective EVM",
+          nativeCurrency: { name: "Injective", symbol: "INJ", decimals: 18 },
+          rpcUrls: [RPC], blockExplorerUrls: [EXPLORER + "/"],
+        }] });
+      }
+      var now = await selectedProvider.request({ method: "eth_chainId" });
+      if (String(now).toLowerCase() !== EVM_CHAIN_HEX) throw new Error("switch your wallet to Injective and try again");
+    }
+    // The wallet must still be the account this page shows, or it would sign as someone else.
+    async function ensureSigner() {
+      var a = null;
+      try { a = await selectedProvider.request({ method: "eth_accounts" }); } catch (e) { return; }
+      if (a && a.length && String(a[0]).toLowerCase() !== account.toLowerCase())
+        throw new Error("your wallet switched to " + a[0].slice(0, 6) + "…" + a[0].slice(-4) + " — reload to use it");
+    }
+    // Send through the wallet and wait for it to land; a revert is an error, not a hash.
+    async function send(to, data, label) {
+      setMsg(label + " — confirm in your wallet…");
+      var hash = await selectedProvider.request({ method: "eth_sendTransaction", params: [{ from: account, to: to, data: data }] });
+      setMsg(label + " — waiting for injective…");
+      for (var i = 0; i < 200; i++) {
+        var rc = null;
+        try { rc = (await batch([["eth_getTransactionReceipt", [hash]]]))[0].result; } catch (e) {}
+        if (!rc) { try { rc = await selectedProvider.request({ method: "eth_getTransactionReceipt", params: [hash] }); } catch (e) {} }
+        if (rc && rc.blockNumber) {
+          if (rc.status !== "0x1") throw new Error(label + " failed on chain (" + hash.slice(0, 10) + "…)");
+          return hash;
+        }
+        await sleep(1500);
+      }
+      throw new Error(label + " is still pending — check " + hash);
+    }
+    function explain(e) {
+      if (e && (e.code === 4001 || /user rejected|user denied|rejected the request/i.test(e.message || ""))) return "cancelled in the wallet";
+      var text = String((e && (e.data && (e.data.data || e.data))) || "") + " " + String((e && e.message) || "");
+      for (var sel in ERRORS) if (text.indexOf(sel.slice(2)) !== -1) return ERRORS[sel];
+      return (e && e.message ? e.message : String(e)).slice(0, 220);
+    }
+    function done(text, hash) {
+      msg.className = "msg ok"; msg.textContent = text + " ";
+      var a = document.createElement("a"); a.href = EXPLORER + "/tx/" + hash; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = "view tx";
+      msg.appendChild(a);
+    }
+    async function run(fn) {
+      if (busy) return;
+      busy = true; render();
+      try { await ensureSigner(); await ensureInjective(); await fn(); }
+      catch (e) { setMsg(explain(e), "err"); }
+      finally { busy = false; await refresh(); }
+    }
+
+    function doStake() {
+      var T = TIERS[tier], amt = stakeAmount();
+      run(async function () {
+        // read fresh: the wallet may have moved since the last refresh
+        var r = await batch([call(ZZTOP, SEL.balanceOf + a32(account)), call(ZZTOP, SEL.allowance + a32(account) + a32(STAKING))]);
+        var bal = words(ok(r[0]))[0], allow = words(ok(r[1]))[0];
+        if (maxMode) amt = bal;
+        if (!amt || amt <= 0n) throw new Error("enter an amount above zero");
+        if (amt > bal) throw new Error("not enough ZZTOP — the wallet holds " + formatUnits(bal, 18, 2));
+        if (allow < amt) await send(ZZTOP, SEL.approve + a32(STAKING) + w32(amt), "approve ZZTOP");
+        var h = await send(STAKING, SEL.stake + w32(amt) + w32(tier), "lock " + formatUnits(amt, 18, 2) + " ZZTOP");
+        amountIn.value = ""; maxMode = false;
+        done("locked " + formatUnits(amt, 18, 2) + " ZZTOP for " + T.short + ".", h);
+      });
+    }
+    function doWithdraw(p) {
+      run(async function () {
+        var h = await send(STAKING, SEL.withdraw + w32(p.id), "withdraw " + formatUnits(p.amount, 18, 2) + " ZZTOP");
+        done("withdrew " + formatUnits(p.amount, 18, 2) + " ZZTOP.", h);
+      });
+    }
+    // claim only the tokens with something to pay: fewer transfers, and one token that
+    // refuses to transfer (a blacklisted USDC holder, say) cannot block the rest
+    claimBtn.addEventListener("click", function () {
+      run(async function () {
+        var now = chainNow();
+        var list = tokenList.filter(function (t) { return earnedNow(t, now) > 0n; }).map(function (t) { return t.addr; });
+        if (!list.length) throw new Error("nothing to claim yet");
+        var data = SEL.getRewardFor + w32(32) + w32(list.length) + list.map(a32).join("");
+        var h = await send(STAKING, data, "claim rewards");
+        done("rewards claimed.", h);
+      });
+    });
+    $("unwrap").addEventListener("click", function () {
+      run(async function () {
+        var bal = words(ok((await batch([call(WINJ, SEL.balanceOf + a32(account))]))[0]))[0];
+        if (!bal) throw new Error("no WINJ to unwrap");
+        var h = await send(WINJ, SEL.withdraw + w32(bal), "unwrap " + nice(bal, 18) + " WINJ");
+        done("unwrapped " + nice(bal, 18) + " WINJ into INJ.", h);
+      });
+    });
+
+    // ---- start --------------------------------------------------------------------
+    var cl = $("contractLink"); cl.href = EXPLORER + "/address/" + STAKING + "?tab=contract"; cl.textContent = STAKING.slice(0, 6) + "…" + STAKING.slice(-4);
+    render();
+    refresh();
+  </script>
+</body>
+</html>

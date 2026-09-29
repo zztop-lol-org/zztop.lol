@@ -344,14 +344,15 @@
 
     // ---- link rows on the same grid, left-aligned under the leftmost Z ----
     const ROWGAP = 1.2;          // vertical spacing between rows, in em
-    // stacked ABOVE the Z row, lexicographic top-to-bottom: ZZAUCTION, ZZBRIDGE, ZZCHART, ZZTELEGRAM, ZZZZ...
+    // stacked ABOVE the Z row, lexicographic top-to-bottom: ZZAUCTION, ZZBRIDGE, ZZCHART, ZZSTAKE, ZZTELEGRAM, ZZZZ...
     // ZZX (row -1) appears first, each one above it follows.
     const LINKS = [
       { text: "ZZX",        href: "https://x.com/zztoplol",                row: -1, order: 0 },
       { text: "ZZTELEGRAM", href: "https://t.me/zztop_lol",               row: -2, order: 1 },
-      { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -3, order: 2 },
-      { text: "ZZBRIDGE",   href: "/bridge",                              row: -4, order: 3, internal: true },
-      { text: "ZZAUCTION",  href: "/auction",                             row: -5, order: 4, internal: true },
+      { text: "ZZSTAKE",    href: "/stake",                               row: -3, order: 2, internal: true },
+      { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -4, order: 3 },
+      { text: "ZZBRIDGE",   href: "/bridge",                              row: -5, order: 4, internal: true },
+      { text: "ZZAUCTION",  href: "/auction",                             row: -6, order: 5, internal: true },
     ];
     const linkRows = LINKS.map((L) => {
       const a = document.createElement("a");
@@ -433,7 +434,7 @@
       const recenter = smooth(seg(p, 0.50, 0.74));
       const settle = smooth(seg(p, 0.74, 0.94));   // drop the group so the rows above balance
       word.style.transform =
-        `translate(${(nOffset * recenter).toFixed(2)}px, ${(2.4 * settle).toFixed(3)}em)`;
+        `translate(${(nOffset * recenter).toFixed(2)}px, ${(3.6 * settle).toFixed(3)}em)`;
 
       sides.forEach(({ el, dir, k }) => {
         const start = 0.50 + (k - 1) * 0.03;         // inner z's spread first
@@ -446,8 +447,8 @@
 
       // --- Phase D: link rows rise into place ABOVE the Z row (0.77 -> 0.97) ---
       linkRows.forEach((L) => {
-        const start = 0.74 + L.order * 0.03;         // tightened so the 5th row still lands by 1.0
-        const t = smooth(seg(p, start, start + 0.14));
+        const start = 0.74 + L.order * 0.025;        // tightened so the 6th row still lands by 1.0
+        const t = smooth(seg(p, start, start + 0.13));
         const y = L.row * ROWGAP + (1 - t) * 0.6;    // rise up into place
         L.a.style.opacity = t.toFixed(3);
         L.a.style.transform =

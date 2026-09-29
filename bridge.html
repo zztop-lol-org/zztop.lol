@@ -250,7 +250,7 @@
       <div class="terms" id="terms">
         <div class="term hidden" id="feeRow">
           <span>relay fee<svg class="tick" id="feeTick" viewBox="0 0 20 20" role="img" aria-label="refreshes every 15 seconds"><title>refreshes every 15 seconds</title><circle class="trk" cx="10" cy="10" r="8"/><circle class="arc" cx="10" cy="10" r="8"/></svg></span>
-          <span><span id="feeVal" class="hold" tabindex="0" role="button" title="hold 3 seconds to change" aria-label="relay fee — hold for 3 seconds to change it">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /></span>
+          <span><span id="feeVal" class="hold" tabindex="0" role="button" aria-label="relay fee — hold for 3 seconds to change it">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /></span>
         </div>
         <div class="note hidden" id="feeNote"></div>
         <div class="term hidden" id="totalRow"><span>total</span><span id="total">—</span></div>
@@ -525,7 +525,7 @@
           var below = feeOverride !== null && rf !== null && feeOverride < rf;
           if (feeOverride === null) {
             feeNote.textContent = feeData.fee_eth + " ETH of gas right now (" + Math.round(feeData.gas_units / 1000) + "k gas × " +
-              feeData.gas_price_gwei.toFixed(2) + " gwei) ≈ $" + usd + " · hold the fee 3s to change it";
+              feeData.gas_price_gwei.toFixed(2) + " gwei) ≈ $" + usd;
           } else {
             feeNote.textContent = (below ? "below the real relay cost right now — relayers may not pick it up. " : "custom fee. ") +
               "real cost: " + formatUnits(rf, t.dec, 6) + " " + t.sym + " · ";

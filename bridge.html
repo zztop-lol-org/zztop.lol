@@ -268,6 +268,7 @@
         </div>
         <div class="note warn hidden" id="destWarn"></div>
         <div class="term" id="gasRow"><span>ethereum gas</span><span id="gasVal">—</span></div>
+        <div class="note warn hidden" id="gasWarn"></div>
       </div>
 
       <button class="go" id="go" type="button">CONNECT WALLET</button>
@@ -563,6 +564,13 @@
       var gp = gasPriceWei();
       $("gasRow").classList.toggle("hidden", wd);
       $("gasVal").textContent = gp && feeData ? "≈ " + formatUnits(DEPOSIT_GAS * gp, 18, 6) + " ETH (≈ $" + (Number(DEPOSIT_GAS * gp) / 1e18 * feeData.usd.eth).toFixed(2) + ")" : "—";
+      // No ETH for gas is a warning, not a block: MetaMask's gas station pays the network
+      // fee by selling some of the token instead (a real deposit on 29 Sep went through
+      // exactly that way, at ~1.9x the actual gas). Wallets without it just refuse the
+      // transaction, and nothing is lost.
+      var lowGas = !wd && !!account && bal.ethNative !== null && !!gp && bal.ethNative < DEPOSIT_GAS * gp;
+      $("gasWarn").classList.toggle("hidden", !lowGas);
+      if (lowGas) $("gasWarn").textContent = "no ETH here for gas. your wallet may pay the network fee in tokens instead — metamask's gas station does, at a markup. a little ETH in the wallet is cheaper.";
 
       paintButton(amt, av);
     }
@@ -578,7 +586,6 @@
       else if (amt > av) label = wd ? "AMOUNT + FEE EXCEED BALANCE" : "NOT ENOUGH " + t.sym;
       else if (wd && fee() !== null && fee() <= 0n) label = "FEE MUST BE ABOVE 0";
       else if (wd && tokenKey !== "inj" && bal.injGas < INJ_TX_FEE) label = "NEED A LITTLE INJ FOR GAS";
-      else if (!wd && !t.native && bal.ethNative !== null && gasPriceWei() && bal.ethNative < DEPOSIT_GAS * gasPriceWei()) label = "NEED ETH FOR GAS";
       else {
         // a custom destination is spelled out on the button itself, so the last thing
         // anyone reads before signing is where the funds are going

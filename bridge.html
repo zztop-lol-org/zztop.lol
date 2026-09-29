@@ -123,6 +123,30 @@
     .pen { background: transparent; border: 0; padding: 0 0 0 .45em; color: var(--dim); cursor: pointer; vertical-align: middle; }
     .pen svg { width: .9em; height: .9em; display: block; }
     .pen:hover { color: var(--green); }
+    /* The fee is precomputed. Changing it takes a deliberate 3-second hold, so nobody
+       brushes a working number into one that relayers ignore. The underline fills
+       while you hold; let go early and nothing happens. */
+    .hold { position: relative; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; border-bottom: 1px dotted var(--dim); padding-bottom: 1px; }
+    .hold::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--green); box-shadow: 0 0 .5em rgba(124,255,176,.6); }
+    .hold.holding::after { width: 100%; transition: width 3s linear; }
+    .hold:focus-visible { outline: 1px solid var(--green); outline-offset: 3px; }
+    /* refresh ring next to the fee: drains over the 15s until the next fetch, spins
+       while one is in flight */
+    .tick { width: .95em; height: .95em; vertical-align: -.14em; margin-left: .45em; overflow: visible; }
+    .tick circle { fill: none; stroke-width: 2.6; }
+    .tick .trk { stroke: rgba(124,255,176,.15); }
+    .tick .arc { stroke: var(--green); stroke-linecap: round; stroke-dasharray: 50.27; stroke-dashoffset: 0; transform: rotate(-90deg); transform-origin: 50% 50%; }
+    .tick.run .arc { animation: zz-drain 15s linear forwards; }
+    .tick.loading .arc { stroke-dasharray: 14 36.27; animation: zz-spin .8s linear infinite; }
+    @keyframes zz-drain { to { stroke-dashoffset: 50.27; } }
+    @keyframes zz-spin { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+    @media (prefers-reduced-motion: reduce) { .tick.run .arc, .tick.loading .arc { animation: none; } }
+    .destchange { margin-left: .6em; font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; font-size: .8rem; }
+    .destedit { display: flex; flex-direction: column; gap: .5rem; border: 1px solid var(--line); border-radius: .5rem; padding: .7rem; background: rgba(0,0,0,.25); }
+    .destinput { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--green); color: var(--green); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; padding: .3em .1em; outline: none; }
+    .destactions { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-weight: 300; font-size: .82rem; }
+    .destedit .note { text-align: left; }
+    .reset { background: none; border: 0; padding: 0; font: inherit; color: var(--green); text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
     .feeinput { width: 7.5em; text-align: right; font-family: inherit; font-size: inherit; color: var(--green); background: transparent; border: 0; border-bottom: 1px solid var(--green); padding: 0 .2em; outline: none; }
 
     .go { width: 100%; font-weight: 800; font-size: 1.1rem; letter-spacing: .02em; color: #0a0a0f; background: var(--green); border: 0; border-radius: .5rem; padding: .8em 1.1em; cursor: pointer; box-shadow: 0 0 1.4em rgba(124,255,176,.3); font-family: inherit; }
@@ -177,8 +201,8 @@
     <h1 class="title">ZZBRIDGE</h1>
     <div class="lede">
       <p>ethereum to injective and back, over peggy.</p>
-      <p>withdrawals pay what relaying them actually costs in gas right now. not a flat $5.</p>
-      <p class="dim">the fee is an eth amount, converted to your token at a fresh rate every time you load the page.</p>
+      <p>withdrawals pay what relaying them actually costs in gas right now.</p>
+      <p class="dim">the fee is an eth amount, converted to your token at a fresh rate.</p>
     </div>
 
     <section class="card" id="card">
@@ -225,12 +249,23 @@
 
       <div class="terms" id="terms">
         <div class="term hidden" id="feeRow">
-          <span>relay fee</span>
-          <span><span id="feeVal">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /><button class="pen" id="feeEdit" type="button" title="change the fee" aria-label="change the fee"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button></span>
+          <span>relay fee<svg class="tick" id="feeTick" viewBox="0 0 20 20" role="img" aria-label="refreshes every 15 seconds"><title>refreshes every 15 seconds</title><circle class="trk" cx="10" cy="10" r="8"/><circle class="arc" cx="10" cy="10" r="8"/></svg></span>
+          <span><span id="feeVal" class="hold" tabindex="0" role="button" title="hold 3 seconds to change" aria-label="relay fee — hold for 3 seconds to change it">…</span><input class="feeinput hidden" id="feeInput" type="text" inputmode="decimal" aria-label="relay fee" /></span>
         </div>
         <div class="note hidden" id="feeNote"></div>
         <div class="term"><span>you receive</span><span id="receive">—</span></div>
-        <div class="term"><span>to</span><span id="dest">connect a wallet</span></div>
+        <div class="term"><span>to</span><span><span id="dest">connect a wallet</span><button class="reset destchange hidden" id="destChange" type="button">change</button></span></div>
+        <div class="destedit hidden" id="destEdit">
+          <input class="destinput" id="destInput" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="inj1… or 0x…" aria-label="destination address" />
+          <div class="destactions">
+            <button type="button" class="reset" id="destWallet">use another wallet</button>
+            <button type="button" class="reset" id="destMine">use my wallet</button>
+            <button type="button" class="reset" id="destDone">done</button>
+          </div>
+          <div class="picker hidden" id="destPicker"></div>
+          <p class="note" id="destNote"></p>
+        </div>
+        <div class="note warn hidden" id="destWarn"></div>
         <div class="term" id="gasRow"><span>ethereum gas</span><span id="gasVal">—</span></div>
       </div>
 
@@ -269,7 +304,7 @@
     var $ = function (id) { return document.getElementById(id); };
     var tokenSel = $("token"), swapBtn = $("swap"), amountIn = $("amount"), goBtn = $("go"), msg = $("msg"),
         connectBtn = $("connect"), picker = $("picker"), who = $("who"), disconnectBtn = $("disconnect"),
-        feeRow = $("feeRow"), feeVal = $("feeVal"), feeInput = $("feeInput"), feeEdit = $("feeEdit"), feeNote = $("feeNote");
+        feeRow = $("feeRow"), feeVal = $("feeVal"), feeInput = $("feeInput"), feeNote = $("feeNote");
 
     // ---- state --------------------------------------------------------------------
     var dir = "deposit";          // deposit: Ethereum -> Injective · withdraw: Injective -> Ethereum
@@ -279,6 +314,12 @@
     var feeOverride = null;       // BigInt raw, only when the user edited the fee
     var bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
     var busy = false, sdk = null;
+    var BUNDLE = "/lib/bridge.js?v=7c07378bd5";   // rewritten by src/bridge/stamp.mjs on every build
+    // Where the funds land. null means the connected wallet itself. Otherwise a 20-byte
+    // address, typed in or taken from another wallet — the same 20 bytes are the inj1
+    // account on Injective and the 0x address on Ethereum.
+    var destHex = null, pickingDest = false;
+    function destination() { return destHex || (account ? account.toLowerCase() : null); }
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     function setMsg(t, cls) { msg.textContent = t; msg.className = "msg " + (cls || ""); }
     var PREF = "zz_bridge";
@@ -322,6 +363,20 @@
       var data = convertBits(b, 8, 5, true), pm = bechPolymod(hrpExpand("inj").concat(data).concat([0, 0, 0, 0, 0, 0])) ^ 1, cs = [];
       for (var j = 0; j < 6; ++j) cs.push((pm >> 5 * (5 - j)) & 31);
       var out = "inj1"; data.concat(cs).forEach(function (d) { out += B32.charAt(d); }); return out;
+    }
+    // inj1… -> 0x…, with the bech32 checksum verified: a typo fails here, not on chain.
+    function bech32ToHex(str) {
+      str = String(str).trim();
+      if (str !== str.toLowerCase() && str !== str.toUpperCase()) return null;   // mixed case is never valid bech32
+      str = str.toLowerCase();
+      var pos = str.lastIndexOf("1");
+      if (pos < 1 || str.slice(0, pos) !== "inj") return null;
+      var data = [];
+      for (var i = pos + 1; i < str.length; i++) { var d = B32.indexOf(str.charAt(i)); if (d < 0) return null; data.push(d); }
+      if (data.length !== 38 || bechPolymod(hrpExpand("inj").concat(data)) !== 1) return null;
+      var bytes = convertBits(data.slice(0, -6), 5, 8, false);
+      if (bytes.length !== 20) return null;
+      return "0x" + bytes.map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
     }
     var short = function (a) { return a ? a.slice(0, a.indexOf("1") > 0 && a.indexOf("0x") !== 0 ? 8 : 6) + "…" + a.slice(-4) : ""; };
 
@@ -370,14 +425,30 @@
       try { return BigInt(j.balance.amount); } catch (e) { return null; }
     }
 
+    // Fresh gas and prices every 15s. The endpoint caches for 12s at each Cloudflare
+    // location, so however many tabs are open, each location reaches Coinbase and the
+    // Ethereum RPC about five times a minute — far inside both of their public limits.
+    // One fetch at a time (setTimeout, not setInterval), and none while the tab is hidden.
+    var FEE_REFRESH_MS = 15000, feeTimer = null, feeTick = $("feeTick");
     async function loadFee() {
+      clearTimeout(feeTimer);
+      feeTick.classList.remove("run"); feeTick.classList.add("loading");
       try {
         var r = await fetch("/api/bridge-fee", { cache: "no-store" });
         var j = await r.json();
-        feeData = r.ok && j && j.fees ? j : null;
-      } catch (e) { feeData = null; }
+        if (r.ok && j && j.fees) feeData = j;
+        else if (!feeData) feeData = null;        // keep the last good figure through a blip
+      } catch (e) { /* keep the last good figure */ }
+      feeTick.classList.remove("loading");
+      void feeTick.getBoundingClientRect();       // restart the drain animation from full
+      feeTick.classList.add("run");
       render();
+      if (!document.hidden) feeTimer = setTimeout(loadFee, FEE_REFRESH_MS);
     }
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) clearTimeout(feeTimer);
+      else loadFee();                              // back on the tab: refresh straight away
+    });
 
     async function loadBalances() {
       if (!account) return;
@@ -439,20 +510,37 @@
         var f = fee(), rf = realFee();
         if (feeInput.classList.contains("hidden"))
           feeVal.textContent = f === null ? (feeData === null ? "unavailable" : "…") : formatUnits(f, t.dec, 6) + " " + t.sym;
+        feeNote.textContent = "";
         if (feeData) {
           var usd = feeData.fee_usd.toFixed(2);
-          var line = feeData.fee_eth + " ETH of gas right now (" + Math.round(feeData.gas_units / 1000) + "k gas × " +
-            feeData.gas_price_gwei.toFixed(2) + " gwei) ≈ $" + usd + " · the official bridge charges ≈ $" + feeData.official_usd;
           var below = feeOverride !== null && rf !== null && feeOverride < rf;
-          feeNote.textContent = below
-            ? "below the real relay cost right now — relayers may not pick it up. real cost: " + formatUnits(rf, t.dec, 6) + " " + t.sym
-            : line;
+          if (feeOverride === null) {
+            feeNote.textContent = feeData.fee_eth + " ETH of gas right now (" + Math.round(feeData.gas_units / 1000) + "k gas × " +
+              feeData.gas_price_gwei.toFixed(2) + " gwei) ≈ $" + usd + " · hold the fee 3s to change it";
+          } else {
+            feeNote.textContent = (below ? "below the real relay cost right now — relayers may not pick it up. " : "custom fee. ") +
+              "real cost: " + formatUnits(rf, t.dec, 6) + " " + t.sym + " · ";
+            var rs = document.createElement("button");
+            rs.type = "button"; rs.className = "reset"; rs.textContent = "use the real cost";
+            rs.addEventListener("click", function () { feeOverride = null; render(); });
+            feeNote.appendChild(rs);
+          }
           feeNote.className = "note" + (below ? " warn" : "");
         } else feeNote.textContent = "could not read ethereum gas and prices just now — reload to try again";
       }
 
       $("receive").textContent = amt ? formatUnits(amt, t.dec, 6) + " " + (wd && t.native ? "WETH" : t.sym) + (wd ? " on Ethereum" : " on Injective") : "—";
-      $("dest").textContent = !account ? "connect a wallet" : wd ? account.slice(0, 6) + "…" + account.slice(-4) + " (your wallet)" : injAddress.slice(0, 8) + "…" + injAddress.slice(-4) + " (your injective account)";
+      var dh = destination(), custom = !!destHex;
+      if (!dh) $("dest").textContent = "connect a wallet";
+      else {
+        var shown = wd ? dh.slice(0, 6) + "…" + dh.slice(-4) : (function (i) { return i.slice(0, 8) + "…" + i.slice(-4); })(getInjectiveAddress(dh));
+        $("dest").textContent = shown + (custom ? " (another address)" : wd ? " (your wallet)" : " (your injective account)");
+      }
+      $("dest").style.color = custom ? "var(--warn)" : "";
+      $("destChange").classList.toggle("hidden", !account || !$("destEdit").classList.contains("hidden"));
+      $("destWarn").classList.toggle("hidden", !custom);
+      if (custom) $("destWarn").textContent = "funds go to an address other than the connected wallet — " +
+        (wd ? dh : getInjectiveAddress(dh)) + ". check it before you sign.";
 
       var gp = gasPriceWei();
       $("gasRow").classList.toggle("hidden", wd);
@@ -472,7 +560,14 @@
       else if (amt > av) label = "NOT ENOUGH " + t.sym;
       else if (wd && fee() !== null && fee() <= 0n) label = "FEE MUST BE ABOVE 0";
       else if (wd && tokenKey !== "inj" && bal.injGas < INJ_TX_FEE) label = "NEED A LITTLE INJ FOR GAS";
-      else { label = wd ? "BRIDGE TO ETHEREUM" : "BRIDGE TO INJECTIVE"; ok = true; }
+      else {
+        // a custom destination is spelled out on the button itself, so the last thing
+        // anyone reads before signing is where the funds are going
+        var dh = destination();
+        label = destHex ? "BRIDGE TO " + (wd ? dh.slice(0, 6) + "…" + dh.slice(-4) : (function (i) { return i.slice(0, 8) + "…" + i.slice(-4); })(getInjectiveAddress(dh)))
+                        : wd ? "BRIDGE TO ETHEREUM" : "BRIDGE TO INJECTIVE";
+        ok = true;
+      }
       goBtn.textContent = label;
       goBtn.disabled = !ok;
     }
@@ -499,13 +594,33 @@
       amountIn.value = plain(av, TOKENS[tokenKey].dec, TOKENS[tokenKey].dec); render();
     });
 
-    // the fee is editable: raise it to be safe, or lower it at your own risk. The
-    // protocol only requires it to be above zero.
-    feeEdit.addEventListener("click", function () {
+    // The fee is precomputed from live gas and prices. It only becomes editable after a
+    // 3-second hold — mouse, touch or keyboard — so it can't be changed by accident.
+    // Raise it to be safe, or lower it at your own risk: the protocol only needs > 0.
+    var HOLD_MS = 3000, holdTimer = null;
+    function openFeeEditor() {
       var t = TOKENS[tokenKey], f = fee();
       feeInput.value = f === null ? "" : plain(f, t.dec, t.dec);
       feeVal.classList.add("hidden"); feeInput.classList.remove("hidden"); feeInput.focus(); feeInput.select();
+    }
+    function startHold(e) {
+      if (holdTimer || fee() === null) return;
+      if (e && e.cancelable && e.type === "pointerdown") e.preventDefault();   // no text selection / callout
+      feeVal.classList.add("holding");
+      holdTimer = setTimeout(function () { holdTimer = null; feeVal.classList.remove("holding"); openFeeEditor(); }, HOLD_MS);
+    }
+    function endHold() {
+      if (!holdTimer) return;
+      clearTimeout(holdTimer); holdTimer = null; feeVal.classList.remove("holding");
+    }
+    feeVal.addEventListener("pointerdown", startHold);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { feeVal.addEventListener(ev, endHold); });
+    feeVal.addEventListener("contextmenu", function (e) { e.preventDefault(); });   // long-press menu on mobile
+    feeVal.addEventListener("keydown", function (e) {
+      if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); startHold(); }
     });
+    feeVal.addEventListener("keyup", function (e) { if (e.key === "Enter" || e.key === " ") endHold(); });
+    feeVal.addEventListener("blur", endHold);
     function commitFee() {
       var t = TOKENS[tokenKey], v = parseUnits(feeInput.value, t.dec);
       if (v !== null && v > 0n) feeOverride = (realFee() !== null && v === realFee()) ? null : v;
@@ -516,6 +631,125 @@
       if (e.key === "Enter") feeInput.blur();
       if (e.key === "Escape") { feeInput.value = ""; feeInput.blur(); }
     });
+
+    // ---- destination ----------------------------------------------------------------
+    // Typed in, pasted, or taken from another wallet. Every route is validated before it
+    // is used, because a wrong destination is the one mistake here nobody can undo.
+    var destEdit = $("destEdit"), destInput = $("destInput"), destNote = $("destNote"), destPicker = $("destPicker");
+    var pendingDest = null;   // the validated address in the editor, not applied until "done"
+
+    async function parseDest(v) {
+      v = String(v || "").trim();
+      if (!v) return { error: "paste an inj1… or 0x… address" };
+      if (/^inj1/i.test(v)) {
+        var h = bech32ToHex(v);
+        return h ? { hex: h } : { error: "that inj1 address fails its checksum — check it for a typo" };
+      }
+      if (/^0x[0-9a-fA-F]{40}$/.test(v)) {
+        var body = v.slice(2), mixed = body !== body.toLowerCase() && body !== body.toUpperCase();
+        if (mixed) {
+          sdk = sdk || await import(BUNDLE);
+          if (sdk.toChecksumAddress(v) !== v) return { error: "that 0x address fails its checksum — check it for a typo" };
+          return { hex: v.toLowerCase() };
+        }
+        return { hex: v.toLowerCase(), unchecked: true };   // all one case: EIP-55 has nothing to verify
+      }
+      return { error: "not an inj1… or 0x… address" };
+    }
+    async function isContract(hex) {
+      try { var c = await ethRpc("eth_getCode", [hex, "latest"]); return !!c && c !== "0x"; } catch (e) { return false; }
+    }
+    // Each check can wait on the network (the contract lookup), so an older one can
+    // finish after a newer one. Only the latest check may write — otherwise a stale
+    // "valid" note lands next to an address with a typo in it.
+    var destSeq = 0;
+    async function checkDest() {
+      var seq = ++destSeq, value = destInput.value;
+      pendingDest = null;
+      var r = await parseDest(value);
+      if (seq !== destSeq) return;
+      destNote.className = "note";
+      if (r.error) { destNote.textContent = r.error; destNote.className = "note warn"; return; }
+      var both = getInjectiveAddress(r.hex) + " · " + r.hex;
+      var extra = r.unchecked ? " — no checksum in an all-lowercase address, so compare it character by character" : "";
+      var contract = dir === "withdraw" && await isContract(r.hex);
+      if (seq !== destSeq) return;
+      pendingDest = r.hex;
+      if (contract) {
+        destNote.textContent = both + " — this is a contract on ethereum; only send here if it can receive tokens";
+        destNote.className = "note warn";
+      } else destNote.textContent = both + extra;
+    }
+    function openDestEditor() {
+      destInput.value = destHex ? (dir === "withdraw" ? destHex : getInjectiveAddress(destHex)) : "";
+      destEdit.classList.remove("hidden"); destPicker.classList.add("hidden");
+      destNote.textContent = ""; pendingDest = null; render();
+      destInput.focus();
+      if (destInput.value) checkDest();
+    }
+    function closeDestEditor() { destEdit.classList.add("hidden"); destPicker.classList.add("hidden"); }
+    function applyDest(hex) {
+      destHex = hex && account && hex !== account.toLowerCase() ? hex : null;
+      closeDestEditor(); setMsg(""); render();
+    }
+    $("destChange").addEventListener("click", openDestEditor);
+    var destTimer = null;
+    destInput.addEventListener("input", function () { clearTimeout(destTimer); destTimer = setTimeout(checkDest, 250); });
+    destInput.addEventListener("keydown", function (e) { if (e.key === "Enter") $("destDone").click(); if (e.key === "Escape") { closeDestEditor(); render(); } });
+    $("destMine").addEventListener("click", function () { applyDest(null); });
+    $("destDone").addEventListener("click", async function () {
+      if (!destInput.value.trim()) { applyDest(null); return; }
+      await checkDest();
+      if (pendingDest) applyDest(pendingDest);
+    });
+
+    // Another wallet as the destination. A different extension just reports its account.
+    // The same extension is asked to let you choose (wallet_requestPermissions); that
+    // moves its active account, which accountsChanged is told to ignore, and signing
+    // stays with the connected wallet — ensureSigner() asks you to switch back first.
+    $("destWallet").addEventListener("click", async function () {
+      requestProviders(); await sleep(300);
+      var list = providerList();
+      if (!list.length) { destNote.textContent = "no wallet found"; destNote.className = "note warn"; return; }
+      destPicker.innerHTML = "";
+      list.forEach(function (entry) {
+        var b = document.createElement("button");
+        if (entry.info.icon) { var im = document.createElement("img"); im.src = entry.info.icon; im.alt = ""; b.appendChild(im); }
+        var sp = document.createElement("span"); sp.textContent = entry.info.name || "wallet"; b.appendChild(sp);
+        b.addEventListener("click", function () { pickDestFrom(entry); });
+        destPicker.appendChild(b);
+      });
+      destPicker.classList.remove("hidden");
+    });
+    async function pickDestFrom(entry) {
+      pickingDest = true;
+      try {
+        if (entry.provider === selectedProvider) {
+          try { await entry.provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] }); }
+          catch (e) { if (e && e.code === 4001) throw e; }       // declined; other errors: fall through
+        }
+        var a = await entry.provider.request({ method: "eth_requestAccounts" });
+        if (!a || !a.length) throw new Error("no account shared");
+        var other = a.map(function (x) { return String(x).toLowerCase(); }).filter(function (x) { return x !== account.toLowerCase(); })[0];
+        if (!other) { destNote.textContent = "that is the connected wallet — pick a different account"; destNote.className = "note warn"; return; }
+        destInput.value = dir === "withdraw" ? other : getInjectiveAddress(other);
+        destPicker.classList.add("hidden");
+        await checkDest();
+      } catch (e) {
+        destNote.textContent = e && e.code === 4001 ? "cancelled in the wallet" : "could not read that wallet's account";
+        destNote.className = "note warn";
+      } finally { setTimeout(function () { pickingDest = false; }, 1500); }
+    }
+
+    // The connected wallet signs. If its active account moved (typically after choosing a
+    // destination in the same wallet), say so rather than let it sign as someone else.
+    async function ensureSigner() {
+      var a = null;
+      try { a = await selectedProvider.request({ method: "eth_accounts" }); } catch (e) { return; }
+      if (a && a.length && String(a[0]).toLowerCase() !== account.toLowerCase())
+        throw new Error("your wallet is on " + a[0].slice(0, 6) + "…" + a[0].slice(-4) + " — switch it back to " +
+                        account.slice(0, 6) + "…" + account.slice(-4) + " to sign. the destination stays as set.");
+    }
 
     // ---- wallet (same connect flow as /auction, incl. the Brave-mobile single request) -
     var discovered = {};
@@ -546,6 +780,7 @@
     }
     function resetConnection() {
       account = null; selectedProvider = null; currentName = null; injAddress = null; forgetWallet();
+      destHex = null; closeDestEditor();
       bal = { eth: {}, weth: 0n, ethNative: 0n, inj: {}, injGas: 0n };
       who.textContent = ""; disconnectBtn.classList.add("hidden"); picker.classList.add("hidden"); connectBtn.classList.remove("hidden");
       setMsg(""); render();
@@ -553,7 +788,15 @@
     function bindAccountEvents(prov) {
       if (prov && prov.on && !prov.__zzBound) {
         prov.__zzBound = true;
-        prov.on("accountsChanged", function (a) { if (!a || !a.length) resetConnection(); else { account = a[0]; showConnected(); } });
+        prov.on("accountsChanged", function (a) {
+          if (!a || !a.length) { resetConnection(); return; }
+          var first = String(a[0]).toLowerCase();
+          // picking a destination from this same wallet moves its active account — that
+          // is the destination being chosen, not the signer changing
+          if (pickingDest || (destHex && first === destHex)) return;
+          if (account && first === account.toLowerCase()) return;   // back on the signer: nothing to do
+          account = a[0]; destHex = null; showConnected();           // a genuinely different signer
+        });
       }
     }
     function backToConnect() { picker.classList.add("hidden"); connectBtn.classList.remove("hidden"); }
@@ -681,6 +924,7 @@
     async function deposit(key, amt) {
       var t = TOKENS[key];
       await ensureEthereum();
+      await ensureSigner();
       var token = t.erc20;
       if (t.native) {
         // Peggy takes ERC-20s only, so ETH goes in as WETH. Anything already held as
@@ -694,23 +938,26 @@
         if (t.resetApprove && allowed > 0n) await sendEth({ to: token, data: enc.approve(PEGGY, 0n) }, "resetting the " + t.sym + " allowance");
         await sendEth({ to: token, data: enc.approve(PEGGY, amt) }, "approving " + t.sym);
       }
-      var before = await injBalance(injAddress, t.denom);
-      var hash = await sendEth({ to: PEGGY, data: enc.sendToInjective(token, account, amt) }, "sending to injective");
+      var destInj = getInjectiveAddress(destination());
+      var before = await injBalance(destInj, t.denom);
+      var hash = await sendEth({ to: PEGGY, data: enc.sendToInjective(token, destination(), amt) }, "sending to injective");
       msg.className = "msg ok"; msg.textContent = "sent — it lands on injective once validators confirm the deposit. ";
       msg.appendChild(link("https://etherscan.io/tx/" + hash, "etherscan " + hash.slice(0, 10) + "…"));
-      if (before !== null) watchArrival(function () { return injBalance(injAddress, t.denom); }, before, amt, "injective");
+      if (before !== null) watchArrival(function () { return injBalance(destInj, t.denom); }, before, amt, "injective");
     }
 
     async function withdraw(key, amt) {
       var t = TOKENS[key], f = fee();
       if (f === null || f <= 0n) throw new Error("the relay fee is not available — reload the page");
       await ensureInjective();
+      await ensureSigner();
       setMsg("loading…");
-      sdk = sdk || await import("/lib/bridge.js?v=20d50b29de");
-      var m = sdk.buildWithdraw({ injectiveAddress: injAddress, ethDest: account, denom: t.denom, amountRaw: amt, feeRaw: f });
+      sdk = sdk || await import(BUNDLE);
+      var ethDest = destination();
+      var m = sdk.buildWithdraw({ injectiveAddress: injAddress, ethDest: ethDest, denom: t.denom, amountRaw: amt, feeRaw: f });
       setMsg("finding a healthy endpoint…");
       var picked = await sdk.pickEndpoint(LCDS);
-      var before = null; try { before = await erc20Balance(t.erc20, account); } catch (e) {}
+      var before = null; try { before = await erc20Balance(t.erc20, ethDest); } catch (e) {}
       setMsg("sign in your wallet…");
       var res = await sdk.sendTxs({
         ethereumAddress: account, injectiveAddress: injAddress,
@@ -723,14 +970,13 @@
       msg.className = "msg ok";
       msg.textContent = "sent — a relayer carries it to ethereum, usually within minutes" + (t.native ? " (it arrives as WETH)" : "") + ". ";
       msg.appendChild(link("https://explorer.injective.network/transaction/" + r.txHash, "explorer " + String(r.txHash).slice(0, 10) + "…"));
-      if (before !== null) watchArrival(function () { return erc20Balance(t.erc20, account); }, before, amt, "ethereum");
+      if (before !== null) watchArrival(function () { return erc20Balance(t.erc20, ethDest); }, before, amt, "ethereum");
     }
 
     // ---- start: a fresh fee on every load, refreshed while a withdrawal is on screen --
     render();
     loadFee();
-    setInterval(function () { if (dir === "withdraw" && !busy) loadFee(); }, 20000);
-    setInterval(function () { if (account && !busy) loadBalances(); }, 30000);
+    setInterval(function () { if (account && !busy && !document.hidden) loadBalances(); }, 30000);
   </script>
 </body>
 </html>

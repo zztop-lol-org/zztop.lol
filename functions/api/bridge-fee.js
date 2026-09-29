@@ -15,8 +15,7 @@
 const GAS_UNITS = 475000;          // p90 gas of those 1,506 batches (median 411k)
 const BASE_BUFFER = 1.25;          // the base fee can rise 12.5% a block before a relayer lands
 const MIN_TIP_WEI = 10000000n;     // 0.01 gwei floor, in case every recent block tipped nothing
-const CACHE_SECONDS = 20;
-const OFFICIAL_USD = 5;            // what the official bridge charges, for comparison
+const CACHE_SECONDS = 12;          // the page refreshes every 15s, so each poll can see a new figure
 
 const ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org"];
 
@@ -135,7 +134,6 @@ export async function onRequestGet({ request, waitUntil }) {
     fee_wei: feeWei.toString(),
     fee_eth: format(feeWei, 18, 8),
     fee_usd: +(feeEth * px.usd.eth).toFixed(4),
-    official_usd: OFFICIAL_USD,
     usd: Object.fromEntries(Object.entries(px.usd).map(([k, v]) => [k, +v.toFixed(6)])),
     price_source: px.source,
     fees,

@@ -94,6 +94,14 @@
     .lede { font-weight: 300; font-size: 1.05rem; line-height: 1.6; max-width: 34rem; }
 
     .round { font-weight: 300; font-size: .85rem; letter-spacing: .06em; color: var(--dim); max-width: 34rem; }
+    /* a finished round this wallet has not claimed yet: one card per round */
+    .claims { width: 100%; max-width: 34rem; display: flex; flex-direction: column; gap: .7rem; }
+    .claim { border: 1px solid var(--green); border-radius: .6rem; padding: .9rem 1rem; display: flex; flex-direction: column; gap: .5rem; text-align: left; background: rgba(124,255,176,.05); box-shadow: 0 0 1.2em rgba(124,255,176,.12); transition: opacity .6s, transform .6s; }
+    .claim .claimmsg { font-weight: 300; font-size: .85rem; line-height: 1.5; color: var(--dim); overflow-wrap: anywhere; min-height: 1.2em; }
+    .claim .claimmsg.err { color: #ff8f8f; }
+    .claim .claimmsg.ok { color: var(--green); }
+    .claim .claimmsg a { color: var(--green); }
+    .claim.gone { opacity: 0; transform: translateY(-.4rem); }
     .round b { font-weight: 800; color: var(--green); letter-spacing: .02em; }
     .subbed { font-weight: 300; font-size: .95rem; line-height: 1.5; color: var(--green); border-left: 2px solid var(--green); padding-left: .8rem; }
     .notlisted { font-weight: 300; font-size: .95rem; line-height: 1.5; color: #ffcf8f; border-left: 2px solid #ffcf8f; padding-left: .8rem; }
@@ -183,6 +191,8 @@
     </div>
 
     <p class="round" id="round">reading the chain…</p>
+
+    <section class="claims hidden" id="claims" aria-live="polite"></section>
 
     <section class="panel hidden" id="panel">
       <p class="subbed hidden" id="subbed"></p>
@@ -309,6 +319,7 @@
     // asking and reports instead. Authorizations reopen on the 1st, by which point
     // every grant has expired and has to be signed again anyway.
     var closedRoundId  = 0;   // set once deposits shut
+    var latestRoundGuess = 0; // the contract round for the chain's auction round, created or not
     var currentRoundId = 0;   // the round on the chain right now, open or not
     var roundEndsAt    = 0;
     var resultsMode   = false;
@@ -388,6 +399,7 @@
       auctionEndsAt = Number(st.state.auction_ending_timestamp || 0);
 
       var guess = chainRound - ROUND_OFFSET;
+      latestRoundGuess = guess;
       var info = await smartQuery(CONTRACT, { get_round_info: { round_id: guess } });
       var d = info && info.data;
       var now = Math.floor(Date.now() / 1000);
@@ -506,8 +518,9 @@
         b.className = "big"; b.textContent = weiToInj(res.depositWei.toString()) + " INJ";
         box.appendChild(b);
         box.appendChild(document.createTextNode("zzbot joined round " + rid + " for you."));
-        small(res.basket.length
-          ? "your share of the basket: " + res.basket.length + " assets, already yours to withdraw"
+        small(res.withdrawn
+          ? "claimed — your share of the basket (" + res.basket.length + " assets) is in your wallet · authorizations reopen " + reopen
+          : closed ? "your share of the basket is ready — claim it above · authorizations reopen " + reopen
           : "the basket lands when the auction settles · authorizations reopen " + reopen);
         return;
       }
@@ -528,7 +541,9 @@
                 : "") + "authorizations reopen " + reopen + ".");
     }
 
-    loadRound();
+    // kept, so anything that needs the round (the claim check after a wallet
+    // reconnects on page load, say) can wait for it instead of reading round 0
+    var roundLoaded = loadRound();
 
     // Does a fee allowance already exist for this wallet? The chain answers a missing one
     // with HTTP 500 {"code":13,"message":"fee-grant not found"} — an answer, not a failure.
@@ -724,6 +739,7 @@
     // to wipe all of them: the joined path returns early, so whatever the last wallet
     // left behind would otherwise still be sitting there under the new address.
     function clearWalletState() {
+      clearClaims();
       var rb = document.getElementById("resultBody");
       rb.textContent = ""; rb.className = "result";
       document.getElementById("resultpanel").classList.add("hidden");
@@ -734,9 +750,102 @@
       setMsg("");
     }
 
+    // ---- claiming a finished round -------------------------------------------------
+    // zzbot deposits for people, but taking the basket out is the depositor's own
+    // transaction ({"claim":{"round_id":N}}; the bot's grant covers join_pool only).
+    // After connecting, look back over the last few rounds for one that has ended,
+    // has a basket, and where this wallet deposited and has not withdrawn yet.
+    // latestRoundGuess: the contract round matching the chain's auction round, set by
+    // loadRound even when that round has not been created yet — between rounds the
+    // page shows "not open yet" and currentRoundId stays 0, which is exactly when the
+    // previous round is waiting to be claimed
+    var CLAIM_LOOKBACK = 3, claimSeq = 0;
+    function clearClaims() {
+      claimSeq++;                                          // drop answers for the previous wallet
+      var box = document.getElementById("claims");
+      box.innerHTML = ""; box.classList.add("hidden");
+    }
+    async function claimableRounds(inj) {
+      var last = Math.max(currentRoundId, closedRoundId || 0, latestRoundGuess), out = [], now = Math.floor(Date.now() / 1000);
+      for (var r = last; r > 0 && r > last - CLAIM_LOOKBACK; r--) {
+        var info = await smartQuery(CONTRACT, { get_round_info: { round_id: r } });
+        var d = info && info.data;
+        if (!d || !(Number(d.end_date) <= now) || !(d.basket && d.basket.length)) continue;
+        var u = await smartQuery(CONTRACT, { get_user_round_info: { round_id: r, user_addr: inj } });
+        var ud = u && u.data;
+        var dep = 0n; try { dep = BigInt(ud && ud.deposit); } catch (e) {}
+        if (ud && dep > 0n && !ud.has_withdrawn) out.push({ round: r, depositWei: dep });
+      }
+      return out;
+    }
+    async function checkClaims(inj) {
+      var seq = ++claimSeq, list;
+      // a wallet can connect (or reconnect on load) before the round has been read
+      try { await roundLoaded; } catch (e) {}
+      if (seq !== claimSeq) return;
+      try { list = await claimableRounds(inj); } catch (e) { return; }
+      if (seq !== claimSeq || inj !== injAddress || !list.length) return;
+      var box = document.getElementById("claims");
+      list.forEach(function (c) { box.appendChild(claimCard(c)); });
+      box.classList.remove("hidden");
+    }
+    function claimCard(c) {
+      var card = document.createElement("div"); card.className = "claim";
+      var btn = document.createElement("button"); btn.className = "authorize";
+      btn.textContent = "CLAIM PREVIOUS ROUND (#" + c.round + ")";
+      var note = document.createElement("p"); note.className = "claimmsg";
+      note.textContent = "zzbot joined round " + c.round + " for you with " + weiToInj(c.depositWei.toString()) + " INJ — your share of the basket is waiting.";
+      var say = function (t, cls) { note.textContent = t; note.className = "claimmsg" + (cls ? " " + cls : ""); };
+      btn.addEventListener("click", async function () {
+        if (!account || !injAddress) return;
+        btn.disabled = true;
+        try {
+          say("loading…");
+          sdk = sdk || await import("/lib/auction.js?v=ea047d0b26");
+          await ensureInjectiveChain();
+          say("checking the claim…");
+          var picked = await sdk.pickEndpoint(LCDS);
+          say("sign in your wallet…");
+          var res = await sdk.sendClaim({
+            ethereumAddress: account, injectiveAddress: injAddress, contract: CONTRACT, roundId: c.round,
+            restEndpoint: picked.endpoint, endpoints: LCDS, chainId: CHAIN_ID, evmChainId: EVM_CHAIN_ID,
+            signTypedData: function (addr, json) {
+              return selectedProvider.request({ method: "eth_signTypedData_v4", params: [addr, json] });
+            },
+          });
+          if (res.code) throw new Error("the claim failed on chain (code " + res.code + ")");
+          btn.remove();
+          note.className = "claimmsg ok"; note.textContent = "claimed round #" + c.round + " ✓ ";
+          var a = document.createElement("a");
+          a.href = "https://explorer.injective.network/transaction/" + res.txHash;
+          a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = String(res.txHash).slice(0, 10) + "…";
+          note.appendChild(a);
+          setTimeout(function () {
+            card.classList.add("gone");
+            setTimeout(function () {
+              card.remove();
+              var box = document.getElementById("claims");
+              if (!box.children.length) box.classList.add("hidden");
+            }, 650);
+          }, 4000);
+          if (typeof showResults === "function" && resultsMode) setTimeout(function () { showResults(); }, 1500);
+        } catch (e) {
+          var m = (e && (e.message || e.originalMessage)) || "claim failed";
+          if (e && e.code === 4001) m = "cancelled in your wallet";
+          else if (/account .* not found/i.test(m)) m = "this wallet has no Injective account yet — send it a little INJ, then try again";
+          else if (/insufficient fee|insufficient funds/i.test(m)) m = "not enough INJ for the fee (about 0.0003 INJ) — top up and try again";
+          say(m, "err");
+          btn.disabled = false;
+        }
+      });
+      card.appendChild(btn); card.appendChild(note);
+      return card;
+    }
+
     function showConnected() {
       clearWalletState();
       injAddress = getInjectiveAddress(account);
+      checkClaims(injAddress);
       who.textContent = "connected: " + account + (currentName ? "  ·  " + currentName : "");
       connectBtn.classList.add("hidden");
       picker.classList.add("hidden");
@@ -997,7 +1106,7 @@
 
       if (!pendingGroups) {                       // step 1: reveal, sign nothing
         setMsg("loading…");
-        try { sdk = sdk || await import("/lib/auction.js?v=33a5a22499"); }
+        try { sdk = sdk || await import("/lib/auction.js?v=ea047d0b26"); }
         catch (e) { setMsg("could not load the signing library — reload and try again", "err"); return; }
         await buildMsgs();
         details.classList.remove("hidden");

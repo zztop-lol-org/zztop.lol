@@ -60,10 +60,10 @@ async function sendTweetReport(env, chatId, all) {
   // wrote from what they only amplified, which are not worth the same
   const byAddr = new Map();
   for (const r of rows) {
-    if (!byAddr.has(r.inj)) byAddr.set(r.inj, { urls: [], post: 0, quote: 0, repost: 0 });
+    if (!byAddr.has(r.inj)) byAddr.set(r.inj, { urls: [], post: 0, quote: 0, repost: 0, reply: 0 });
     const e = byAddr.get(r.inj);
     e.urls.push(r.url);
-    e[r.kind === "repost" || r.kind === "quote" ? r.kind : "post"]++;
+    e[["repost", "quote", "reply"].includes(r.kind) ? r.kind : "post"]++;
   }
 
   const stamp = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC";
@@ -72,8 +72,8 @@ async function sendTweetReport(env, chatId, all) {
   if (!rows.length) {
     await tg(env, "sendMessage", { chat_id: chatId, text: `no new posted tweets ${window}` });
   } else {
-    const csv = ["addr,tweets,posts,quotes,reposts",
-      ...[...byAddr].map(([a, e]) => `${a},${csvCell(e.urls.join(" "))},${e.post},${e.quote},${e.repost}`)].join("\n");
+    const csv = ["addr,tweets,posts,quotes,reposts,replies",
+      ...[...byAddr].map(([a, e]) => `${a},${csvCell(e.urls.join(" "))},${e.post},${e.quote},${e.repost},${e.reply}`)].join("\n");
     const name = `zztop-tweets-${new Date(now * 1000).toISOString().slice(0, 10)}.csv`;
     await tgSendDoc(env, chatId, name, csv, `${byAddr.size} address(es), ${rows.length} tweet(s) — ${window}`);
   }
@@ -130,7 +130,7 @@ async function getxapiUpload(env, mediaData, mediaType) {
 // The post itself is still fine, so we retry without the attachment.
 const MEDIA_REJECTED = /duration too short|media type unrecognized|invalid media|unsupported media|mediaid/i;
 
-async function getxapiCreate(env, text, mediaIds, quoteId) {
+async function getxapiCreate(env, text, mediaIds, quoteId, replyId) {
   const payload = {
     auth_token: env.GETXAPI_AUTH_TOKEN,
     ct0: env.GETXAPI_CT0,
@@ -138,9 +138,12 @@ async function getxapiCreate(env, text, mediaIds, quoteId) {
     text,
   };
   if (quoteId) payload.quote_tweet_id = quoteId;
+  if (replyId) payload.reply_to_tweet_id = replyId;
   if (mediaIds && mediaIds.length) payload.media_ids = mediaIds;
   if (env.GETXAPI_PROXY) payload.proxy = env.GETXAPI_PROXY;
-  if (env.GETXAPI_COMMUNITY_ID) payload.community_id = env.GETXAPI_COMMUNITY_ID;
+  // a reply lives under the post it answers; X has no reply that is also a
+  // community post, so the community is left out rather than risk a rejection
+  if (env.GETXAPI_COMMUNITY_ID && !replyId) payload.community_id = env.GETXAPI_COMMUNITY_ID;
   let r;
   try {
     r = await fetch("https://api.getxapi.com/twitter/tweet/create", {
@@ -154,6 +157,9 @@ async function getxapiCreate(env, text, mediaIds, quoteId) {
   if (!r.ok) {
     const e = new Error(`getxapi ${r.status}: ${j.error || "post failed"}`);
     if (r.status === 401) e.authDead = true;   // token expired -> re-login needed
+    // the post being answered is gone, private, or closed to replies: tapping
+    // retry would fail the same way
+    else if (replyId && [400, 403, 404].includes(r.status)) e.permanent = true;
     else e.retryable = true;                     // 429 / 423 / 5xx / throttle -> safe to retry
     throw e;
   }
@@ -345,7 +351,7 @@ export async function onRequestPost(context) {
       // Records queued before reposting existed carry no kind, and an older deploy
       // can still be writing them. Classify again here so what happens depends on
       // the submission itself rather than on which version happened to store it.
-      const cls = rec.kind ? { kind: rec.kind, srcId: rec.srcId, text: rec.shareText }
+      const cls = rec.kind ? { kind: rec.kind, srcId: rec.srcId, text: rec.shareText, replyId: rec.replyId }
                            : classify(rec.text, !!rec.file_id);
       let res, droppedMedia = null;
       if (cls.kind === "repost") {
@@ -355,6 +361,7 @@ export async function onRequestPost(context) {
       } else {
         const body = cls.kind === "quote" ? cls.text : rec.text;
         const quoteId = cls.kind === "quote" ? cls.srcId : null;
+        const replyId = cls.kind === "reply" ? cls.replyId : null;
         let mediaIds;
         if (rec.file_id) {
           const bytes = await tgDownload(env, rec.file_id);
@@ -363,11 +370,11 @@ export async function onRequestPost(context) {
           mediaIds = [mid];
         }
         try {
-          res = await getxapiCreate(env, body, mediaIds, quoteId);
+          res = await getxapiCreate(env, body, mediaIds, quoteId, replyId);
         } catch (e) {
           if (!mediaIds || !MEDIA_REJECTED.test(e.message || "")) throw e;
           droppedMedia = e.message;                       // post the words, lose the attachment
-          res = await getxapiCreate(env, body, undefined, quoteId);
+          res = await getxapiCreate(env, body, undefined, quoteId, replyId);
         }
       }
       rec.status = "posted"; rec.url = res.url; rec.retweetId = res.retweetId || null;
@@ -375,8 +382,9 @@ export async function onRequestPost(context) {
       if (droppedMedia) rec.mediaDropped = droppedMedia;
       await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 86400 * 30 });
       const verb = cls.kind === "repost" ? (res.already ? "🔁 already reposted" : "🔁 reposted")
-                 : cls.kind === "quote" ? "💬 quoted" : "✅ posted";
+                 : cls.kind === "quote" ? "💬 quoted" : cls.kind === "reply" ? "↩ replied" : "✅ posted";
       const okText = verb + (res.url ? " " + res.url : " (no url returned)") +
+        (cls.kind === "reply" ? "\nin reply to " + (rec.replyUrl || `https://x.com/i/web/status/${cls.replyId}`) : "") +
         (droppedMedia ? "\n⚠ attachment dropped — X rejected it: " + droppedMedia : "");
       await tg(env, "sendMessage", { chat_id: chatId, reply_to_message_id: msgId, text: okText });
       // also send the confirmation to the community group, with the submitter as an injscan link

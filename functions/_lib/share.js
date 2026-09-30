@@ -10,6 +10,13 @@
 // prose.
 export const X_STATUS = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}\/status(?:es)?|i\/web\/status)\/(\d{5,25})(?:[/?#]\S*)?$/i;
 
+// The tweet id in a link to one X post, or null. The same pattern as above, so
+// the reply-to field accepts exactly the links a repost would.
+export function tweetId(url) {
+  const m = String(url || "").trim().match(X_STATUS);
+  return m ? m[1] : null;
+}
+
 // A submission that is nothing but a link to an X post is a repost, not a new
 // tweet: approving it retweets the original instead of writing our own copy of
 // it. With words around the link there is something of the submitter's worth

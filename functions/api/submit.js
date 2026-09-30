@@ -4,7 +4,7 @@
 // Best-effort auth per product decision (2026-09-04): signed message is the fixed
 // "zzzz confirming it's you\n<unix_ts>"; freshness is the only replay guard.
 import { recoverEthAddress, ethToInj, zzBalanceRaw, zzStakedRaw, meetsThreshold, ZZ_STAKING, INJ_EVM_RPC } from "../_lib/crypto.js";
-import { classify } from "../_lib/share.js";
+import { classify, tweetId } from "../_lib/share.js";
 
 const MSG_PREFIX = "zzzz confirming it's you";
 const TS_WINDOW = 600;                 // 10 min freshness
@@ -36,6 +36,21 @@ async function xDetail(env, id) {
     const url = d.url || `https://x.com/i/web/status/${id}`;
     return { url, author: (url.match(/\.com\/([A-Za-z0-9_]{1,15})\/status/) || [])[1] || null, text: d.text || "" };
   } catch { return null; }
+}
+
+// A reply goes under the post it answers, not into the community — X has no reply
+// that is also a community post. The card shows what is being answered, since
+// that is what decides whether the reply is fine to send.
+function buildReplyCaption(text, meta, replyId, inj, eth, handle) {
+  const own = handle && meta && meta.author && meta.author.toLowerCase() === String(handle).toLowerCase();
+  const lines = ["↩ REPLY → under this post, not the community"];
+  if (own) lines.push("(a reply to our own post)");
+  if (meta) lines.push("", `@${meta.author || "?"}: ${meta.text}`, meta.url);
+  else lines.push("", "⚠ could not read that tweet — deleted, private, or a bad id",
+                  `https://x.com/i/web/status/${replyId}`);
+  if (CTRL.test(text)) lines.push("", "⚠ our reply contains hidden/bidi characters — read carefully");
+  lines.push("", `our reply: ${text}`, "", `— from ${inj}`, eth);
+  return lines.join("\n");
 }
 
 function buildCaption(text, inj, eth) {
@@ -93,7 +108,7 @@ async function tgSend(env, id, caption, bytes, type, ext, label) {
 export async function onRequestPost({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
-  const { address, signature, ts, text, media } = body || {};
+  const { address, signature, ts, text, media, replyTo } = body || {};
 
   // 1) timestamp freshness (best-effort replay guard)
   const now = Math.floor(Date.now() / 1000);
@@ -110,6 +125,13 @@ export async function onRequestPost({ request, env }) {
   // 3) text
   if (typeof text !== "string" || !text.trim()) return json({ error: "empty tweet" }, 400);
   if ([...text].length > MAX_TEXT) return json({ error: "tweet too long" }, 400);
+
+  // 3b) optional reply-to: a link to one X post, or nothing
+  let replyId = null;
+  if (replyTo != null && String(replyTo).trim()) {
+    replyId = tweetId(replyTo);
+    if (!replyId) return json({ error: "reply-to must be a link to one X post" }, 400);
+  }
 
   // 4) optional media (single image or video, base64)
   let bytes = null, mtype = null, ext = null;
@@ -142,12 +164,16 @@ export async function onRequestPost({ request, env }) {
   }
 
   // 7) push to Telegram + store pending
-  const cls = classify(text, !!bytes);
-  const meta = cls.srcId ? await xDetail(env, cls.srcId) : null;
-  const caption = cls.kind === "post"
-    ? buildCaption(text, inj, recovered)
+  // a reply is posted as written, links and all: the repost/quote reading of a
+  // bare link does not apply to an answer
+  const cls = replyId ? { kind: "reply", replyId } : classify(text, !!bytes);
+  const lookup = cls.srcId || cls.replyId;
+  const meta = lookup ? await xDetail(env, lookup) : null;
+  const caption = cls.kind === "post" ? buildCaption(text, inj, recovered)
+    : cls.kind === "reply" ? buildReplyCaption(text, meta, replyId, inj, recovered, env.GETXAPI_HANDLE)
     : buildShareCaption(cls, meta, inj, recovered, env.GETXAPI_HANDLE);
-  const label = cls.kind === "repost" ? "🔁 Repost" : cls.kind === "quote" ? "💬 Quote" : "✅ Post";
+  const label = cls.kind === "repost" ? "🔁 Repost" : cls.kind === "quote" ? "💬 Quote"
+    : cls.kind === "reply" ? "↩ Reply" : "✅ Post";
 
   const id = crypto.randomUUID();
   let fileId;
@@ -156,7 +182,9 @@ export async function onRequestPost({ request, env }) {
 
   const rec = { id, text, file_id: fileId || null, mediaType: mtype, inj, eth: recovered, status: "pending", ts: now,
                 kind: cls.kind, srcId: cls.srcId || null, srcUrl: (meta && meta.url) || null,
-                shareText: cls.kind === "quote" ? cls.text : null };
+                shareText: cls.kind === "quote" ? cls.text : null,
+                replyId: replyId || null,
+                replyUrl: replyId ? ((meta && meta.url) || `https://x.com/i/web/status/${replyId}`) : null };
   await env.TWEETS.put(`tw:${id}`, JSON.stringify(rec), { expirationTtl: 60 * 60 * 24 * 7 });
   await env.TWEETS.put(rlKey, String(used + 1), { expirationTtl: 3700 });
 

@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0a0a0f" />
   <title>zztop — zzstake</title>
-  <meta name="description" content="Lock ZZTOP for 1, 3, 6 or 12 months and earn ZZTOP, INJ, USDT and USDC every second." />
+  <meta name="description" content="Lock ZZTOP for 1, 3, 6 or 12 months and earn rewards streamed every second." />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
   <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
@@ -190,7 +190,7 @@
   <main>
     <h1 class="title">ZZSTAKE</h1>
     <div class="lede">
-      <p>lock zztop. earn zztop, inj, usdt and usdc — every second, claim whenever.</p>
+      <p id="ledeEarn">lock zztop. earn rewards every second, claim whenever.</p>
       <p class="dim">1, 3, 6 or 12 months. the longer the lock, the bigger your share.</p>
     </div>
 
@@ -479,8 +479,18 @@
       return { row: row, v: v };
     }
 
+    // names only what is streaming right now: a token with no round running is not
+    // on offer, so the page does not advertise it
+    function streamingNames(now) {
+      var n = tokenList.filter(function (t) { return active(t, now); })
+        .map(function (t) { return t.sym === "WINJ" ? "inj" : t.sym.toLowerCase(); });
+      if (!n.length) return "rewards";
+      return n.length === 1 ? n[0] : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+    }
+
     function renderStats() {
       if (!G) { if (loadErr) $("locked").textContent = "—"; return; }
+      $("ledeEarn").textContent = "lock zztop. earn " + streamingNames(chainNow()) + " — every second, claim whenever.";
       $("locked").textContent = nice(G.principal, 18);
       $("pct").textContent = pctStr(G.principal, G.supply);
       $("supplySub").textContent = "of " + formatUnits(G.supply, 18, 0) + " ZZTOP";
@@ -558,10 +568,16 @@
       if (!U || !G) { card.classList.add("hidden"); return; }
       card.classList.remove("hidden");
       $("myShare").textContent = U.weight ? "share " + pctStr(U.weight, G.weight) : "";
-      var box = $("myRewards"); box.innerHTML = ""; rewardVals = [];
-      tokenList.forEach(function (t) {
+      // tokens streaming now, and any with something still to claim; the rest are
+      // not paying anyone and would only be a row of zeros
+      var box = $("myRewards"), now = chainNow(); box.innerHTML = ""; rewardVals = [];
+      tokenList.filter(function (t) { return active(t, now) || earnedNow(t, now) > 0n; }).forEach(function (t) {
         var r = tokenRow(t, "0"); box.appendChild(r.row); rewardVals.push({ t: t, v: r.v });
       });
+      if (!rewardVals.length) {
+        var none = el("div", "row"); none.appendChild(el("span", "v dim", "no rewards streaming right now"));
+        none.firstChild.style.marginLeft = "0"; none.firstChild.style.textAlign = "left"; box.appendChild(none);
+      }
       tickRewards();
       var w = $("winjRow");
       if (U.winj > 0n) { $("winjBal").textContent = nice(U.winj, 18); w.classList.remove("hidden"); } else w.classList.add("hidden");

@@ -45,7 +45,7 @@ headings, 300 for body), uppercase `ZZ`-prefixed page names.
 - [ZZLATEST](https://zztop.lol/community/latest): queued and already-posted community submissions
 - [ZZAUCTION](https://zztop.lol/auction): authorize the zzauction bot to join Injective's monthly buyback round for you
 - [ZZBRIDGE](https://zztop.lol/bridge): Ethereum ↔ Injective over Peggy for INJ, ETH, USDT and USDC; withdrawals pay the live Ethereum gas cost of relaying, not a flat fee
-- [ZZSTAKE](https://zztop.lol/stake): lock ZZTOP for 1, 3, 6 or 12 months (1×, 1.5×, 2×, 3× weight) and earn ZZTOP, INJ, USDT and USDC streamed every second; contract 0xfba18A6f1234c014DDc6DA32163843B70D1dBF30 on Injective EVM, verified source
+- [ZZSTAKE](https://zztop.lol/stake): lock ZZTOP for 1, 3, 6 or 12 months (1×, 1.5×, 2×, 3× weight) and earn token rewards streamed every second (whichever tokens zzbot funds each round); contract 0xfba18A6f1234c014DDc6DA32163843B70D1dBF30 on Injective EVM, verified source
 
 ## Token
 

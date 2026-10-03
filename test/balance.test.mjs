@@ -54,9 +54,9 @@ const fakeRpc = (body, status = 200) => async () => ({ ok: status === 200, statu
   const t0 = Date.now();
   const v = await zzBalanceRaw("https://dead.example/", "inj1x", "d", f);
   assert.equal(v, 7_000_000n * 10n ** 18n);
-  assert.deepEqual(seen, ["https://dead.example", ...LCD_FALLBACKS]);
-  assert.ok(Date.now() - t0 < 6000, "a hanging LCD is cut off by the timeout");
-  ok("dead / junk / hanging LCDs fall through to one that answers");
+  assert.deepEqual(seen.sort(), ["https://dead.example", ...LCD_FALLBACKS].sort(), "every LCD is asked");
+  assert.ok(Date.now() - t0 < 1000, "the good answer wins without waiting for the dead or hanging ones");
+  ok("asked in parallel: dead / junk / hanging LCDs do not delay the one that answers");
   await assert.rejects(zzBalanceRaw("https://dead.example", "inj1x", "d", async () => ({ ok: false, status: 503, json: async () => ({}) })));
   ok("every LCD failing is still an error (the gate stays closed)");
   const zero = await zzBalanceRaw(undefined, "inj1x", "d", async () => answer("0"));

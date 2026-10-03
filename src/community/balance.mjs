@@ -2,7 +2,7 @@
 // by_denom avoids pagination; all math is BigInt; callers treat any throw as
 // "fail closed" (reject the submit) — never fail open on an RPC hiccup.
 //
-// Several LCDs, tried in order with a timeout each: one going down (it happened —
+// Several LCDs, each with a timeout: one going down (it happened —
 // lcd.injective.network answered 502 after ~6.5 s for every request) must not
 // turn every submission into "balance check unavailable".
 
@@ -20,22 +20,22 @@ async function withTimeout(fetchImpl, url, init, ms) {
   finally { clearTimeout(t); }
 }
 
-// lcdUrls: one URL or a list; the configured one first, then the fallbacks.
+// lcdUrls: one URL or a list; the configured one plus the fallbacks, all asked at
+// once — the first well-formed answer wins, so a dead endpoint costs nothing as
+// long as any other answers. Every one failing is an error (the gate stays shut).
 export async function zzBalanceRaw(lcdUrls, injAddr, denom, fetchImpl = fetch) {
   const list = [...new Set([].concat(lcdUrls || [], LCD_FALLBACKS).filter(Boolean).map((u) => u.replace(/\/+$/, "")))];
-  let last = null;
-  for (const base of list) {
-    try {
-      const url = `${base}/cosmos/bank/v1beta1/balances/${injAddr}/by_denom?denom=${encodeURIComponent(denom)}`;
-      const res = await withTimeout(fetchImpl, url, { headers: { accept: "application/json" } }, LCD_TIMEOUT_MS);
-      if (!res.ok) { last = new Error(`LCD ${base} ${res.status}`); continue; }
-      const j = await res.json();
-      const amt = j && j.balance && j.balance.amount;
-      if (amt == null || !/^\d+$/.test(String(amt))) { last = new Error(`bad LCD balance payload from ${base}`); continue; }
-      return BigInt(amt);
-    } catch (e) { last = e; }
-  }
-  throw last || new Error("no LCD answered");
+  const one = async (base) => {
+    const url = `${base}/cosmos/bank/v1beta1/balances/${injAddr}/by_denom?denom=${encodeURIComponent(denom)}`;
+    const res = await withTimeout(fetchImpl, url, { headers: { accept: "application/json" } }, LCD_TIMEOUT_MS);
+    if (!res.ok) throw new Error(`LCD ${base} ${res.status}`);
+    const j = await res.json();
+    const amt = j && j.balance && j.balance.amount;
+    if (amt == null || !/^\d+$/.test(String(amt))) throw new Error(`bad LCD balance payload from ${base}`);
+    return BigInt(amt);
+  };
+  try { return await Promise.any(list.map(one)); }
+  catch (e) { throw new Error("no LCD answered: " + ((e.errors || []).map((x) => x.message).join("; ") || e.message)); }
 }
 
 // ZZ locked in ZZStaking on Injective EVM: the stake sits in the contract, so it is no

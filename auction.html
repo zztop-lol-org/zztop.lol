@@ -605,8 +605,12 @@
         var j = await r.json();
         if (!r.ok || j.listed !== false) return;      // eligible, or we could not tell — say nothing
         // The list only holds wallets that have NOT joined, so a depositor reads back
-        // as unlisted. Never warn someone the bot already got in.
-        var jr = await joinResult(currentRoundId, injAddress);
+        // as unlisted. Never warn someone the bot already got in — and check the
+        // round the list came from (j.round_id), not currentRoundId: between rounds
+        // the next one does not exist yet, currentRoundId is 0, and every depositor
+        // of the round just finished would be told they were not eligible.
+        var listRound = Number(j.round_id) || currentRoundId;
+        var jr = await joinResult(listRound, injAddress);
         if (jr && jr.depositWei > 0n) return;
         // the list churns ~5% a round, so this is about the PREVIOUS round, not a verdict
         box.textContent = "this wallet is not on the previous round eligibility list";

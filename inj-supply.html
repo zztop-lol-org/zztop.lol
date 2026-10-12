@@ -105,6 +105,10 @@
     .note b { color: var(--green); font-weight: 800; }
     .updated { font-weight: 300; font-size: .78rem; color: var(--dim); }
     .updated.err { color: #ff8f8f; }
+    /* a quiet pointer to the other tools, not an ad */
+    .more { font-weight: 300; font-size: .82rem; line-height: 1.6; color: var(--dim); max-width: 30rem; margin-top: .4rem; }
+    .more a { color: var(--green); text-decoration: underline; text-decoration-color: rgba(124,255,176,.35); text-underline-offset: .2em; }
+    .more a:hover { text-decoration-color: var(--green); }
     /* phones: the share tucks under the amount instead of taking a column */
     @media (max-width: 420px) {
       .row { grid-template-columns: .6rem 1fr auto; row-gap: 0; }
@@ -161,6 +165,8 @@
     </section>
 
     <p class="updated" id="updated"></p>
+
+    <p class="more">wanna <a href="/auction" data-dir="forward">join injective community buyback with us</a>, or <a href="/bridge" data-dir="forward">fair bridge from and to eth</a>?</p>
   </main>
 
   <script>

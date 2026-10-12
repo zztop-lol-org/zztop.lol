@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- our own origin, Injective LCDs (sentry first, mirrors as failover), and two
+       public Ethereum RPCs for the INJ ERC-20 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://sentry.lcd.injective.network https://injective-rest.publicnode.com https://injective-api.polkachu.com https://ethereum-rpc.publicnode.com https://eth.drpc.org; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>zztop — inj supply</title>
+  <meta name="description" content="Where all the INJ is, live: the Injective chain supply and INJ on Ethereum, with staked, unbonding, wrapped and bridged broken out." />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="canonical" href="https://zztop.lol/inj-supply" />
+  <meta property="og:title" content="zztop — inj supply" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zztop.lol/inj-supply" />
+  <meta property="og:image" content="https://zztop.lol/icons/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://zztop.lol/icons/og.png" />
+  <script>
+    /* Cross-document view transitions: same slide + scroll-restoring back as /auction. */
+    (function () {
+      var DIR = "zz_dir", PATH = "zz_path", TTL = 10000;
+      var norm = function (p) {
+        try { p = new URL(p, location.href).pathname; } catch (e) { return p; }
+        return p.length > 1 && p.slice(-1) === "/" ? p.slice(0, -1) : p;
+      };
+      var stack = function () { try { return JSON.parse(sessionStorage.getItem(PATH) || "[]"); } catch (e) { return []; } };
+      var save = function (v) { try { sessionStorage.setItem(PATH, JSON.stringify(v.slice(-10))); } catch (e) {} };
+      addEventListener("click", function (e) {
+        var a = e.target && e.target.closest && e.target.closest("a[data-dir]");
+        if (!a) return;
+        var dir = a.getAttribute("data-dir"), s = stack();
+        try { sessionStorage.setItem(DIR, dir + "|" + Date.now()); } catch (x) {}
+        if (dir === "forward") { s.push(norm(location.pathname)); save(s); return; }
+        if (s.length && s[s.length - 1] === norm(a.getAttribute("href")) && history.length > 1) {
+          s.pop(); save(s); e.preventDefault(); history.back();
+        }
+      }, true);
+      var type = function (nav, clear) {
+        var d = null;
+        try {
+          var v = sessionStorage.getItem(DIR);
+          if (v) {
+            if (clear) sessionStorage.removeItem(DIR);
+            var p = v.split("|");
+            d = (Date.now() - Number(p[1]) < TTL) ? p[0] : null;
+          }
+        } catch (e) {}
+        if (d) return d === "back" ? "zz-back" : "zz-forward";
+        return nav === "traverse" ? "zz-back" : "zz-forward";
+      };
+      addEventListener("pageswap", function (e) {
+        if (e.viewTransition && e.activation) e.viewTransition.types.add(type(e.activation.navigationType, false));
+      });
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition && window.navigation && navigation.activation)
+          e.viewTransition.types.add(type(navigation.activation.navigationType, true));
+      });
+    })();
+  </script>
+  <link rel="preload" href="/fonts/montserrat-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/montserrat-300-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face { font-family: "Montserrat"; font-weight: 800; font-display: block; src: url("/fonts/montserrat-800-latin.woff2") format("woff2"); }
+    @font-face { font-family: "Montserrat"; font-weight: 300; font-display: block; src: url("/fonts/montserrat-300-latin.woff2") format("woff2"); }
+    :root { color-scheme: dark; --green: #7CFFB0; --dim: #3f6b53; --line: rgba(124,255,176,.16); --warn: #ffcf8f; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100dvh; display: flex; flex-direction: column; background: #0a0a0f; color: var(--green); font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
+
+    .topbar { flex: 0 0 auto; padding: 1.2rem clamp(1rem, 4vw, 2.5rem); }
+    .zzback { display: inline-flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: clamp(1rem, 3.2vw, 1.5rem); letter-spacing: 0.04em; color: var(--green); text-decoration: none; text-shadow: 0 0 0.4em rgba(124,255,176,.4); transition: filter .2s, gap .2s; }
+    .zzback .arrow { width: 1em; height: .78em; display: block; }
+    .zzback:hover { filter: brightness(1.15); gap: 0.8em; }
+    main { flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1.4rem; padding: 2rem 1rem 3rem; text-align: center; }
+    .title { font-weight: 800; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: .03em; line-height: 1; text-shadow: 0 0 .35em rgba(124,255,176,.4); }
+
+    .total { display: flex; flex-direction: column; align-items: center; gap: .35rem; }
+    .lbl { font-weight: 300; font-size: .72rem; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); }
+    .big { font-weight: 800; font-size: clamp(2.2rem, 11vw, 4.6rem); letter-spacing: .01em; line-height: 1.05; text-shadow: 0 0 .4em rgba(124,255,176,.35); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .big small { font-size: .38em; letter-spacing: .08em; margin-left: .25em; }
+    .sub { font-weight: 300; font-size: .85rem; color: var(--dim); line-height: 1.5; }
+    .sub b { color: var(--green); font-weight: 800; }
+
+    /* the whole supply as one bar, each part its share */
+    .bar { width: 100%; max-width: 34rem; height: .8rem; border-radius: .4rem; overflow: hidden; display: flex; background: rgba(124,255,176,.08); }
+    .bar span { height: 100%; transition: width .6s ease; }
+
+    .card { width: 100%; max-width: 34rem; border: 1px solid var(--line); border-radius: .7rem; padding: 1.1rem; display: flex; flex-direction: column; gap: .7rem; background: rgba(124,255,176,.02); text-align: left; }
+    .head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    .head .amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+    .rows { display: flex; flex-direction: column; gap: .55rem; }
+    .row { display: grid; grid-template-columns: .7rem 1fr auto auto; align-items: baseline; gap: .6rem; font-size: .95rem; }
+    .dot { width: .7rem; height: .7rem; border-radius: 50%; align-self: center; }
+    .name { font-weight: 300; }
+    .name small { display: block; color: var(--dim); font-size: .75rem; margin-top: .1em; line-height: 1.4; }
+    .val { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pct { font-weight: 300; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; min-width: 4.2em; white-space: nowrap; }
+    .note { font-weight: 300; font-size: .8rem; line-height: 1.55; color: var(--dim); border-top: 1px solid var(--line); padding-top: .7rem; }
+    .note b { color: var(--green); font-weight: 800; }
+    .updated { font-weight: 300; font-size: .78rem; color: var(--dim); }
+    .updated.err { color: #ff8f8f; }
+    /* phones: the share tucks under the amount instead of taking a column */
+    @media (max-width: 420px) {
+      .row { grid-template-columns: .6rem 1fr auto; row-gap: 0; }
+      .dot { grid-row: 1 / span 2; align-self: start; margin-top: .35em; }
+      .name { grid-row: 1 / span 2; }
+      .val { grid-column: 3; grid-row: 1; }
+      .pct { grid-column: 3; grid-row: 2; min-width: 0; font-size: .8rem; }
+      .head { flex-wrap: wrap; }
+    }
+
+    @view-transition { navigation: auto; }
+    @keyframes zz-out-left  { to   { transform: translateX(-100%); } }
+    @keyframes zz-in-right  { from { transform: translateX(100%);  } }
+    @keyframes zz-out-right { to   { transform: translateX(100%);  } }
+    @keyframes zz-in-left   { from { transform: translateX(-100%); } }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .42s; animation-timing-function: cubic-bezier(.4,0,.2,1); }
+    html:active-view-transition-type(zz-forward)::view-transition-old(root) { animation-name: zz-out-left; }
+    html:active-view-transition-type(zz-forward)::view-transition-new(root) { animation-name: zz-in-right; }
+    html:active-view-transition-type(zz-back)::view-transition-old(root) { animation-name: zz-out-right; }
+    html:active-view-transition-type(zz-back)::view-transition-new(root) { animation-name: zz-in-left; }
+    @media (prefers-reduced-motion: reduce) { .swap { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="zzback" href="/" id="zzback" data-dir="back">
+      <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
+        <line x1="18" y1="35" x2="92" y2="35" stroke="currentColor" stroke-width="14" stroke-linecap="round" />
+        <polyline points="46,10 16,35 46,60" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span>ZZBACK</span>
+    </a>
+  </header>
+  <main>
+    <h1 class="title">INJ SUPPLY</h1>
+
+    <div class="total">
+      <span class="lbl">all inj, everywhere</span>
+      <span class="big" id="total">…<small>INJ</small></span>
+      <span class="sub" id="totalSub">reading injective and ethereum…</span>
+    </div>
+
+    <div class="bar" id="bar" aria-hidden="true"></div>
+
+    <section class="card" aria-label="on injective">
+      <div class="head"><span class="lbl">on injective</span><span class="amt" id="injTotal">…</span></div>
+      <div class="rows" id="injRows"></div>
+    </section>
+
+    <section class="card" aria-label="on ethereum">
+      <div class="head"><span class="lbl">on ethereum</span><span class="amt" id="ethTotal">…</span></div>
+      <div class="rows" id="ethRows"></div>
+      <p class="note" id="bridgeNote"></p>
+    </section>
+
+    <p class="updated" id="updated"></p>
+  </main>
+
+  <script>
+    var LCDS = ["https://sentry.lcd.injective.network", "https://injective-rest.publicnode.com", "https://injective-api.polkachu.com"];
+    var ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org"];
+    var INJ_ERC20 = "0xe28b3B32B6c345A34Ff64674606124Dd5Aceca30";   // INJ on Ethereum
+    var PEGGY = "0xF955C57f9EA9Dc8781965FEaE0b6A2acE2BAD6f3";       // the Injective bridge on Ethereum
+    var WINJ_DENOM = "erc20:0x0000000088827d2d103ee2d9A6b781773AE03FfB";
+    var REFRESH_MS = 30000;
+    var E18 = 10n ** 18n;
+
+    var $ = function (id) { return document.getElementById(id); };
+    function inj(wei) {              // whole INJ with thousands separators
+      var w = wei / E18;
+      return w.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    function pct(part, whole) {
+      if (!whole) return "—";
+      var bp = Number(part * 1000000n / whole) / 10000;
+      return (bp > 0 && bp < 0.01 ? "<0.01" : bp.toFixed(2)) + "%";
+    }
+    // a DecCoin amount ("4085171...000.123") is base units with a fraction: keep the integer part
+    var decInt = function (s) { return BigInt(String(s).split(".")[0] || "0"); };
+
+    async function lcd(path) {
+      for (var i = 0; i < LCDS.length; i++) {
+        try {
+          var r = await fetch(LCDS[i] + path, { cache: "no-store" });
+          if (r.ok) return await r.json();
+        } catch (e) {}
+      }
+      throw new Error("no Injective endpoint answered");
+    }
+    async function ethCall(to, data) {
+      for (var i = 0; i < ETH_RPCS.length; i++) {
+        try {
+          var r = await fetch(ETH_RPCS[i], { method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: to, data: data }, "latest"] }) });
+          var j = await r.json();
+          if (j && typeof j.result === "string" && j.result.length >= 66) return BigInt(j.result.slice(0, 66));
+        } catch (e) {}
+      }
+      throw new Error("no Ethereum endpoint answered");
+    }
+    var supplyOf = function (denom) {
+      return lcd("/cosmos/bank/v1beta1/supply/by_denom?denom=" + encodeURIComponent(denom))
+        .then(function (j) { return BigInt(j.amount.amount); });
+    };
+
+    var COLORS = { staked: "#7CFFB0", unbonding: "#3fbf80", winj: "#6f8cff", community: "#ffcf8f", liquid: "#2a5a42", eth: "#c7c7d4" };
+
+    function row(box, key, name, hint, amount, whole) {
+      var r = document.createElement("div"); r.className = "row";
+      var d = document.createElement("span"); d.className = "dot"; d.style.background = COLORS[key]; r.appendChild(d);
+      var n = document.createElement("span"); n.className = "name"; n.textContent = name;
+      if (hint) { var s = document.createElement("small"); s.textContent = hint; n.appendChild(s); }
+      r.appendChild(n);
+      var v = document.createElement("span"); v.className = "val"; v.textContent = inj(amount); r.appendChild(v);
+      var p = document.createElement("span"); p.className = "pct"; p.textContent = pct(amount, whole); r.appendChild(p);
+      box.appendChild(r);
+    }
+
+    async function load() {
+      var q = await Promise.all([
+        supplyOf("inj"),
+        supplyOf(WINJ_DENOM),
+        lcd("/cosmos/staking/v1beta1/pool"),
+        lcd("/cosmos/distribution/v1beta1/community_pool"),
+        ethCall(INJ_ERC20, "0x18160ddd"),                                          // totalSupply()
+        ethCall(INJ_ERC20, "0x70a08231" + PEGGY.slice(2).toLowerCase().padStart(64, "0")), // balanceOf(Peggy)
+      ]);
+      var injSupply = q[0], winj = q[1];
+      var staked = BigInt(q[2].pool.bonded_tokens), unbonding = BigInt(q[2].pool.not_bonded_tokens);
+      var cp = (q[3].pool || []).filter(function (c) { return c.denom === "inj"; })[0];
+      var community = cp ? decInt(cp.amount) : 0n;
+      var ercSupply = q[4], inBridge = q[5];
+      var onEth = ercSupply - inBridge;
+      var liquid = injSupply - staked - unbonding - winj - community;
+      if (liquid < 0n) liquid = 0n;
+      var total = injSupply + onEth;
+      return { total: total, injSupply: injSupply, staked: staked, unbonding: unbonding, winj: winj, community: community,
+               liquid: liquid, onEth: onEth, ercSupply: ercSupply, inBridge: inBridge };
+    }
+
+    function render(d) {
+      $("total").firstChild.nodeValue = inj(d.total);
+      $("totalSub").innerHTML = "";
+      $("totalSub").append("injective ", Object.assign(document.createElement("b"), { textContent: inj(d.injSupply) }),
+        " + ethereum ", Object.assign(document.createElement("b"), { textContent: inj(d.onEth) }));
+
+      var parts = [["staked", d.staked], ["unbonding", d.unbonding], ["winj", d.winj], ["community", d.community], ["liquid", d.liquid], ["eth", d.onEth]];
+      var bar = $("bar"); bar.innerHTML = "";
+      parts.forEach(function (p) {
+        var s = document.createElement("span");
+        s.style.background = COLORS[p[0]];
+        s.style.width = (Number(p[1] * 1000000n / d.total) / 10000) + "%";
+        bar.appendChild(s);
+      });
+
+      $("injTotal").textContent = inj(d.injSupply) + " · " + pct(d.injSupply, d.total);
+      var ir = $("injRows"); ir.innerHTML = "";
+      row(ir, "staked", "staked", "delegated to validators", d.staked, d.total);
+      row(ir, "unbonding", "unbonding", "on its way out of staking, 21 days", d.unbonding, d.total);
+      row(ir, "winj", "wrapped as WINJ", "injective evm · backed 1:1 by inj in the WINJ contract", d.winj, d.total);
+      row(ir, "community", "community pool", "governance-controlled", d.community, d.total);
+      row(ir, "liquid", "everywhere else", "wallets, exchanges, dexes, other chains over ibc", d.liquid, d.total);
+
+      $("ethTotal").textContent = inj(d.onEth) + " · " + pct(d.onEth, d.total);
+      var er = $("ethRows"); er.innerHTML = "";
+      row(er, "eth", "INJ ERC-20 on ethereum", "outside the bridge", d.onEth, d.total);
+
+      var note = $("bridgeNote"); note.innerHTML = "";
+      note.append("the bridge contract on ethereum also holds ", Object.assign(document.createElement("b"), { textContent: inj(d.inBridge) + " INJ" }),
+        " (of " + inj(d.ercSupply) + " ever issued there). that backs inj bridged to injective, which is already in the injective number — counted once, not twice.");
+    }
+
+    var timer = null;
+    async function refresh() {
+      clearTimeout(timer);
+      try {
+        render(await load());
+        $("updated").className = "updated";
+        $("updated").textContent = "live · updated " + new Date().toLocaleTimeString() + " · refreshes every 30s";
+      } catch (e) {
+        $("updated").className = "updated err";
+        $("updated").textContent = "could not read the chains just now — retrying";
+      }
+      if (!document.hidden) timer = setTimeout(refresh, REFRESH_MS);
+    }
+    document.addEventListener("visibilitychange", function () { if (document.hidden) clearTimeout(timer); else refresh(); });
+    refresh();
+  </script>
+</body>
+</html>

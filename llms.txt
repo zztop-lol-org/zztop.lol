@@ -46,6 +46,7 @@ headings, 300 for body), uppercase `ZZ`-prefixed page names.
 - [ZZAUCTION](https://zztop.lol/auction): authorize the zzauction bot to join Injective's monthly buyback round for you
 - [ZZBRIDGE](https://zztop.lol/bridge): Ethereum ↔ Injective over Peggy for INJ, ETH, USDT and USDC; withdrawals pay the live Ethereum gas cost of relaying, not a flat fee
 - [ZZSTAKE](https://zztop.lol/stake): lock ZZTOP for 1, 3, 6 or 12 months (1×, 1.5×, 2×, 3× weight) and earn token rewards streamed every second (whichever tokens zzbot funds each round); contract 0xfba18A6f1234c014DDc6DA32163843B70D1dBF30 on Injective EVM, verified source
+- [INJ supply](https://zztop.lol/inj-supply): all INJ live — the Injective chain supply plus INJ ERC-20 circulating on Ethereum outside the bridge, broken down into staked, unbonding, wrapped as WINJ, community pool and the rest; the INJ locked in the Ethereum bridge is shown but not double-counted
 
 ## Token
 

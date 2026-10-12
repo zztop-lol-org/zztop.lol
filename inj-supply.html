@@ -103,6 +103,17 @@
     .pct { font-weight: 300; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; min-width: 4.2em; white-space: nowrap; }
     .note { font-weight: 300; font-size: .8rem; line-height: 1.55; color: var(--dim); border-top: 1px solid var(--line); padding-top: .7rem; }
     .note b { color: var(--green); font-weight: 800; }
+    /* the breakdown folds away: first sight is the one number and the bar */
+    .fold { width: 100%; max-width: 34rem; display: flex; flex-direction: column; align-items: center; }
+    .fold > summary { list-style: none; cursor: pointer; font-weight: 300; font-size: .85rem; letter-spacing: .06em; color: var(--dim); padding: .3rem .6rem; border-radius: .4rem; user-select: none; }
+    .fold > summary::-webkit-details-marker { display: none; }
+    .fold > summary:hover, .fold > summary:focus-visible { color: var(--green); outline: none; }
+    .fold > summary .chev { display: inline-block; margin-left: .35em; transition: transform .2s; }
+    .fold[open] > summary .chev { transform: rotate(180deg); }
+    .fold .when-open { display: none; }
+    .fold[open] .when-open { display: inline; }
+    .fold[open] .when-closed { display: none; }
+    .foldbody { width: 100%; display: flex; flex-direction: column; gap: 1.4rem; margin-top: 1rem; }
     .updated { font-weight: 300; font-size: .78rem; color: var(--dim); }
     .updated.err { color: #ff8f8f; }
     /* a quiet pointer to the other tools, not an ad */
@@ -153,6 +164,9 @@
 
     <div class="bar" id="bar" aria-hidden="true"></div>
 
+    <details class="fold" id="fold">
+      <summary><span class="when-closed">show breakdown</span><span class="when-open">hide breakdown</span><span class="chev" aria-hidden="true">▾</span></summary>
+      <div class="foldbody">
     <section class="card" aria-label="on injective">
       <div class="head"><span class="lbl">on injective</span><span class="amt" id="injTotal">…</span></div>
       <div class="rows" id="injRows"></div>
@@ -163,6 +177,8 @@
       <div class="rows" id="ethRows"></div>
       <p class="note" id="bridgeNote"></p>
     </section>
+      </div>
+    </details>
 
     <p class="updated" id="updated"></p>
 

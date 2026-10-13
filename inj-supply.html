@@ -86,6 +86,8 @@
     .big small { font-size: .38em; letter-spacing: .08em; margin-left: .25em; }
     .sub { font-weight: 300; font-size: .85rem; color: var(--dim); line-height: 1.5; }
     .sub b { color: var(--green); font-weight: 800; }
+    .infl { font-weight: 300; font-size: .78rem; letter-spacing: .04em; color: var(--dim); margin-top: .15rem; }
+    .infl b { color: var(--green); font-weight: 800; opacity: .85; }
 
     /* the whole supply as one bar, each part its share */
     .bar { width: 100%; max-width: 34rem; height: .8rem; border-radius: .4rem; overflow: hidden; display: flex; background: rgba(124,255,176,.08); }
@@ -160,6 +162,7 @@
       <span class="lbl">all inj, everywhere</span>
       <span class="big" id="total">…<small>INJ</small></span>
       <span class="sub" id="totalSub">reading injective and ethereum…</span>
+      <span class="infl" id="infl"></span>
     </div>
 
     <div class="bar" id="bar" aria-hidden="true"></div>
@@ -170,6 +173,7 @@
     <section class="card" aria-label="on injective">
       <div class="head"><span class="lbl">on injective</span><span class="amt" id="injTotal">…</span></div>
       <div class="rows" id="injRows"></div>
+      <p class="note" id="inflNote"></p>
     </section>
 
     <section class="card" aria-label="on ethereum">
@@ -253,6 +257,11 @@
         lcd("/cosmos/distribution/v1beta1/community_pool"),
         ethCall(INJ_ERC20, "0x18160ddd"),                                          // totalSupply()
         ethCall(INJ_ERC20, "0x70a08231" + PEGGY.slice(2).toLowerCase().padStart(64, "0")), // balanceOf(Peggy)
+        // the mint module: today's rate, what it mints a year, and the band it moves in.
+        // Past rates are not on offer — public nodes prune state after about a day.
+        lcd("/cosmos/mint/v1beta1/inflation").catch(function () { return null; }),
+        lcd("/cosmos/mint/v1beta1/annual_provisions").catch(function () { return null; }),
+        lcd("/cosmos/mint/v1beta1/params").catch(function () { return null; }),
       ]);
       var injSupply = q[0], winj = q[1];
       var staked = BigInt(q[2].pool.bonded_tokens), unbonding = BigInt(q[2].pool.not_bonded_tokens);
@@ -263,8 +272,13 @@
       var liquid = injSupply - staked - unbonding - winj - community;
       if (liquid < 0n) liquid = 0n;
       var total = injSupply + onEth;
+      var mp = q[8] && q[8].params;
       return { total: total, injSupply: injSupply, staked: staked, unbonding: unbonding, winj: winj, community: community,
-               liquid: liquid, onEth: onEth, ercSupply: ercSupply, inBridge: inBridge };
+               liquid: liquid, onEth: onEth, ercSupply: ercSupply, inBridge: inBridge,
+               inflation: q[6] && q[6].inflation != null ? parseFloat(q[6].inflation) : null,
+               provisions: q[7] && q[7].annual_provisions != null ? decInt(q[7].annual_provisions) : null,
+               inflMin: mp ? parseFloat(mp.inflation_min) : null, inflMax: mp ? parseFloat(mp.inflation_max) : null,
+               goalBonded: mp ? parseFloat(mp.goal_bonded) : null };
     }
 
     function render(d) {
@@ -272,6 +286,21 @@
       $("totalSub").innerHTML = "";
       $("totalSub").append("injective ", Object.assign(document.createElement("b"), { textContent: inj(d.injSupply) }),
         " + ethereum ", Object.assign(document.createElement("b"), { textContent: inj(d.onEth) }));
+
+      var il = $("infl"), inote = $("inflNote"); il.innerHTML = ""; inote.innerHTML = "";
+      if (d.inflation != null) {
+        il.append("inflation ", Object.assign(document.createElement("b"), { textContent: (d.inflation * 100).toFixed(2) + "%" }), " a year");
+        if (d.provisions != null) il.append(" · ≈ " + (Number(d.provisions / (10n ** 16n)) / 1e8).toFixed(2) + "M INJ minted a year");
+        if (d.inflMin != null && d.inflMax != null && d.goalBonded != null) {
+          var bondedPct = Number(d.staked * 10000n / d.injSupply) / 100;
+          var where = d.inflation >= d.inflMax - 1e-9 ? "at its " + (d.inflMax * 100).toFixed(1) + "% ceiling"
+                    : d.inflation <= d.inflMin + 1e-9 ? "at its " + (d.inflMin * 100).toFixed(1) + "% floor" : "between the two";
+          inote.append("inflation moves between " + (d.inflMin * 100).toFixed(1) + "% and " + (d.inflMax * 100).toFixed(1) +
+            "% a year, steering toward " + Math.round(d.goalBonded * 100) + "% of inj staked. with ",
+            Object.assign(document.createElement("b"), { textContent: bondedPct.toFixed(1) + "% staked" }),
+            " it is " + where + " — new inj goes to stakers as rewards.");
+        }
+      }
 
       var parts = [["staked", d.staked], ["unbonding", d.unbonding], ["winj", d.winj], ["community", d.community], ["liquid", d.liquid], ["eth", d.onEth]];
       var bar = $("bar"); bar.innerHTML = "";

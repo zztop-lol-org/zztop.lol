@@ -134,6 +134,13 @@
     .result.miss { color: #ffcf8f; }
     .lede p { margin-bottom: .7rem; }
     .lede .lede-dim { color: var(--dim); }
+    /* paused: only the note, the wallet, and any claim card for a past round stay —
+       nobody's basket is stranded while the bot is off. Drop the "paused" class from
+       the body tag to bring the page back. */
+    .pausednote { display: none; font-weight: 300; font-size: 1.05rem; line-height: 1.6; max-width: 34rem; }
+    .pausednote .lede-dim { color: var(--dim); font-size: .9rem; margin-top: .5rem; }
+    body.paused .pausednote { display: block; }
+    body.paused .lede, body.paused #round, body.paused #panel, body.paused #resultpanel, body.paused #msg { display: none !important; }
     .details { display: flex; flex-direction: column; gap: .9rem; }
     .rawactions { display: inline-flex; gap: 1rem; }
     .rawhead { display: flex; justify-content: space-between; align-items: baseline; font-weight: 300; font-size: .72rem; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
@@ -170,7 +177,7 @@
     @media (prefers-reduced-motion: reduce) { .soon { animation: none; opacity: .8; } }
   </style>
 </head>
-<body>
+<body class="paused">
   <header class="topbar">
     <a class="zzback" href="/" id="zzback" data-dir="back">
       <svg class="arrow" viewBox="0 0 100 70" fill="none" aria-hidden="true">
@@ -183,6 +190,10 @@
 
   <main>
     <h1 class="title">ZZAUCTION</h1>
+    <div class="pausednote">
+      <p>zzauction is paused for now.</p>
+      <p class="lede-dim">if zzbot joined a round for you, connect your wallet — your basket is still here to claim.</p>
+    </div>
     <div class="lede">
       <p>injective has a monthly auction buyback</p>
       <p>people can't get in in time, all slots are full within minutes</p>
@@ -798,7 +809,8 @@
       var btn = document.createElement("button"); btn.className = "authorize";
       btn.textContent = "CLAIM PREVIOUS ROUND (#" + c.round + ")";
       var note = document.createElement("p"); note.className = "claimmsg";
-      note.textContent = "zzbot joined round " + c.round + " for you with " + weiToInj(c.depositWei.toString()) + " INJ — your share of the basket is waiting.";
+      var depInj = (Number(c.depositWei / 10n ** 14n) / 1e4).toString();   // 4 decimals is plenty here
+      note.textContent = "zzbot joined round " + c.round + " for you with " + depInj + " INJ — your share of the basket is waiting.";
       var say = function (t, cls) { note.textContent = t; note.className = "claimmsg" + (cls ? " " + cls : ""); };
       btn.addEventListener("click", async function () {
         if (!account || !injAddress) return;

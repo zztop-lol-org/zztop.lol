@@ -6,6 +6,9 @@ import { GAS_PRICE, JOIN_GAS, injToWei, joinMsg, selfSendMsg, presign, simulateS
   broadcastEverywhere, waitForTx, watchRoundOpen, fetchAccount, throwIfAborted, sleep, getJSON } from "./presign.mjs";
 
 const $ = (id) => document.getElementById(id);
+const probeEnabled = ["dev.zztop.lol", "zztop-lol-dev.pages.dev", "localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+  || location.hostname.endsWith(".zztop-lol-dev.pages.dev");
+$("probePanel").classList.toggle("hidden", !probeEnabled);
 const say = (text, kind = "", scope = operation?.kind) => {
   $("msg").textContent = text; $("msg").className = "msg " + kind;
   if (scope === "probe") {
@@ -26,7 +29,7 @@ function render() {
   $("join").disabled = !!operation || !snapshot || !address;
   $("join").textContent = review ? "SIGN & WAIT FOR OPENING" : "REVIEW DEPOSIT";
   $("stop").classList.toggle("hidden", !operation || operation.sent);
-  $("probe").disabled = !!operation || !address;
+  $("probe").disabled = !probeEnabled || !!operation || !address;
   $("probeSend").classList.toggle("hidden", operation?.kind !== "probe" || !operation.tx || operation.sent);
   $("revoke").disabled = !!operation || !address;
   $("revokeFee").disabled = !!operation || !address;
@@ -108,7 +111,6 @@ async function refresh() {
     const remaining = BigInt(r.round_cap) - BigInt(r.total_deposit);
     $("round").textContent = `round ${r.id} · ${Number(r.chain_round) !== next.chainRound ? "next round not created yet" : now < Number(r.start_date) ? "opens " + stamp(r.start_date) : now >= Number(r.end_date) ? "closed" : "deposit window open"} · ${weiToInj(remaining)} INJ remaining`;
     $("limits").textContent = `Deposit ${weiToInj(next.config.min_user_allocation)}–${weiToInj(r.wallet_cap)} INJ. Transaction fee: ${weiToInj(BigInt(JOIN_GAS) * GAS_PRICE)} INJ.`;
-    $("timing").textContent = `Contract opening: ${stamp(r.start_date)}. InjHub's form opens 60 seconds later. This tab waits for the contract to accept your deposit.`;
     if (!$("amount").value) $("amount").value = weiToInj(next.config.min_user_allocation);
     if (review) {
       try { assertTarget(next, review.target, review.amount); }
@@ -242,6 +244,7 @@ $("join").addEventListener("click", async () => {
 $("amount").addEventListener("input", () => { review = null; $("details").classList.add("hidden"); render(); });
 $("stop").addEventListener("click", () => stop());
 $("probe").addEventListener("click", async () => {
+  if (!probeEnabled) return;
   const op = begin("probe", TESTNET);
   try {
     op.lcds = await healthy(TESTNET, op.ctrl.signal);

@@ -1,12 +1,18 @@
 import { getInjectiveAddress, MsgExecuteContractCompat } from "@injectivelabs/sdk-ts";
 import { buildRevokeParts } from "./lib-entry.mjs";
 import { MAINNET, TESTNET, CONTRACT, LEGACY_BOT, healthyEndpoints, loadSnapshot,
-  loadDeployment, freshHeader, assertTarget, smart, terminal, weiToInj } from "./buyback.mjs";
+  loadDeployment, freshHeader, assertTarget, smart, readUserRound, terminal, weiToInj } from "./buyback.mjs";
 import { GAS_PRICE, JOIN_GAS, injToWei, joinMsg, selfSendMsg, presign, simulateSigned,
   broadcastEverywhere, waitForTx, watchRoundOpen, fetchAccount, throwIfAborted, sleep, getJSON } from "./presign.mjs";
 
 const $ = (id) => document.getElementById(id);
-const say = (text, kind = "") => { $("msg").textContent = text; $("msg").className = "msg " + kind; };
+const say = (text, kind = "", scope = operation?.kind) => {
+  $("msg").textContent = text; $("msg").className = "msg " + kind;
+  if (scope === "probe") {
+    $("probeStatus").textContent = text; $("probeStatus").className = "msg " + kind;
+    $("probeStatus").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+};
 const stamp = (seconds) => new Date(Number(seconds) * 1000).toISOString().replace("T", " ").replace(".000Z", " UTC");
 let provider, account, address, snapshot, endpoints = [], review, operation, walletEpoch = 0, refreshing = false;
 const discovered = new Map();
@@ -33,8 +39,10 @@ function stop(message = "Stopped. The signed transaction was discarded from this
   operation = null;
   review = null;
   $("details").classList.add("hidden");
+  $("recheck").classList.add("hidden");
+  $("probeRecheck").classList.add("hidden");
   if (old?.sent) message = "The transaction was already sent. Check its hash below; stopping cannot undo it.";
-  say(message);
+  say(message, "", old?.kind);
   render();
 }
 
@@ -44,6 +52,11 @@ function begin(kind, network) {
   operation = op;
   $("receipt").textContent = "";
   $("recheck").classList.add("hidden");
+  $("probeRecheck").classList.add("hidden");
+  if (kind === "probe") {
+    $("probeReceipt").replaceChildren(); $("probeReceipt").classList.add("hidden");
+    say("Preparing the testnet probe…");
+  }
   render();
   return op;
 }
@@ -133,6 +146,10 @@ async function submit(op) {
   const link = document.createElement("a");
   link.href = op.network.explorer + hash; link.target = "_blank"; link.rel = "noopener noreferrer";
   link.textContent = hash; $("receipt").replaceChildren(link);
+  if (op.kind === "probe") {
+    $("probeReceipt").replaceChildren("Transaction: ", link.cloneNode(true));
+    $("probeReceipt").classList.remove("hidden");
+  }
   say("Sending the signed transaction…");
   const sent = await broadcastEverywhere({ lcds: op.lcds, txBytes: op.tx.txBytes, signal: op.ctrl.signal });
   op.tx = null;
@@ -143,6 +160,7 @@ async function submit(op) {
   if (!delivered) {
     say("Confirmation is still pending. Check the linked transaction before signing again.", "err");
     $("recheck").classList.remove("hidden");
+    $("probeRecheck").classList.toggle("hidden", op.kind !== "probe");
     op.pendingHash = hash;
     return false;
   }
@@ -229,16 +247,20 @@ $("probe").addEventListener("click", async () => {
     op.lcds = await healthy(TESTNET, op.ctrl.signal);
     const header = await freshHeader(op.lcds[0], TESTNET.chainId, op.ctrl.signal);
     await sign(op, selfSendMsg({ address: op.owner, amountWei: "1000000000000" }), 200000, Number(header.height) + 2000);
+    $("probeReceipt").textContent = "Signed transaction (not sent yet): " + op.tx.txHash;
+    $("probeReceipt").classList.remove("hidden");
     say("Testnet transaction signed and held. Wait at least 10 seconds, then send it with the button below. Keep this tab open.");
     $("probeSend").disabled = true; render();
     await sleep(10000, op.ctrl.signal); live(op);
     $("probeSend").disabled = false;
+    say("Ready to send. The testnet transaction is signed and has not been broadcast yet.");
   } catch (e) { fail(op, e); }
 });
 $("probeSend").addEventListener("click", async () => {
   const op = operation;
   if (op?.kind !== "probe" || !op.tx || op.sent) return;
   $("probeSend").disabled = true;
+  say("Checking the held testnet transaction before sending…");
   try {
     await sequenceCheck(op);
     await Promise.any(op.lcds.map((ep) => freshHeader(ep, TESTNET.chainId, op.ctrl.signal)));
@@ -248,33 +270,47 @@ $("probeSend").addEventListener("click", async () => {
     if (await submit(op)) finish(op);
   } catch (e) { fail(op, e); }
 });
-$("recheck").addEventListener("click", async () => {
+async function recheckConfirmation() {
   const op = operation;
   if (!op?.pendingHash) return;
   $("recheck").disabled = true;
+  $("probeRecheck").disabled = true;
+  say("Checking transaction confirmation…");
   try {
     const result = await waitForTx(op.lcds, op.pendingHash, { signal: op.ctrl.signal });
     live(op);
     if (!result) { say("Still not indexed. Check the explorer and retry confirmation.", "err"); return; }
     say(result.code === 0 ? "Transaction confirmed on chain." : `Transaction failed: ${result.log}`, result.code === 0 ? "ok" : "err");
-    $("recheck").classList.add("hidden"); finish(op);
+    $("recheck").classList.add("hidden"); $("probeRecheck").classList.add("hidden"); finish(op);
   } catch (e) { fail(op, e); }
-  finally { $("recheck").disabled = false; }
-});
+  finally { $("recheck").disabled = false; $("probeRecheck").disabled = false; }
+}
+$("recheck").addEventListener("click", recheckConfirmation);
+$("probeRecheck").addEventListener("click", recheckConfirmation);
 
 async function checkClaims() {
   const owner = address, epoch = walletEpoch;
   $("claims").replaceChildren();
+  $("claimStatus").classList.add("hidden");
   if (!owner || !snapshot || !endpoints.length || operation) return;
   const cards = await Promise.allSettled(Array.from({ length: Math.min(3, Number(snapshot.round.id)) }, async (_, i) => {
     const id = Number(snapshot.round.id) - i;
     const round = await Promise.any(endpoints.map((ep) => smart(ep, { get_round_info: { round_id: id } })));
     if (Date.parse(snapshot.header.time) / 1000 < Number(round.end_date) || !round.basket?.length) return null;
-    const user = await Promise.any(endpoints.map((ep) => smart(ep, { get_user_round_info: { round_id: id, user_addr: owner } })));
+    const records = await Promise.allSettled(endpoints.map((ep) => readUserRound(ep, id, owner)));
+    const user = records.find((r) => r.status === "fulfilled" && r.value)?.value;
+    if (!user) {
+      if (records.every((r) => r.status === "rejected")) throw new Error("Cannot check past participation");
+      return null;
+    }
     if (BigInt(user.deposit || 0) <= 0n || user.has_withdrawn) return null;
     return id;
   }));
   if (address !== owner || epoch !== walletEpoch || operation) return;
+  if (cards.some((r) => r.status === "rejected")) {
+    $("claimStatus").textContent = "Some previous-round claims could not be checked. Try reconnecting in a moment.";
+    $("claimStatus").classList.remove("hidden");
+  }
   for (const r of cards) if (r.status === "fulfilled" && r.value) {
     const button = document.createElement("button"); button.className = "authorize";
     button.textContent = `CLAIM ROUND #${r.value}`;

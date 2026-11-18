@@ -201,6 +201,7 @@
     </div>
     <p class="round" id="round" aria-live="polite">reading the chain…</p>
     <section id="claims" aria-label="Claim previous rounds"></section>
+    <p class="hint hidden" id="claimStatus" role="status"></p>
     <section class="panel hidden" id="panel">
       <label class="amountrow" for="amount">deposit <input id="amount" type="text" inputmode="decimal" autocomplete="off" aria-describedby="limits"/> INJ</label>
       <p class="hint" id="limits"></p>
@@ -223,11 +224,14 @@
       <pre id="endpoints"></pre>
       <p>Endpoints are checked for the correct network and recent blocks. Failed requests never trigger a deposit. The transaction is sent only after successful contract simulation.</p>
     </details>
-    <details class="developer">
+    <details class="developer" id="probePanel">
       <summary>try signing now and sending later on testnet</summary>
       <p class="probehelp">Connect a wallet funded with testnet INJ. This sends 0.000001 testnet INJ back to the same address, plus a 0.000032 testnet INJ fee. Sign, wait at least 10 seconds, then send. The wallet switches to Injective Testnet (1439). No memo is included.</p>
       <button class="altaction" id="probe" disabled>SIGN TESTNET PROBE</button>
       <button class="authorize hidden" id="probeSend" disabled>SEND HELD TESTNET PROBE</button>
+      <p class="msg hidden" id="probeStatus" role="status" aria-live="polite"></p>
+      <p class="receipt hidden" id="probeReceipt"></p>
+      <button class="altaction hidden" id="probeRecheck">CHECK TESTNET CONFIRMATION AGAIN</button>
     </details>
     <details class="developer">
       <summary>remove an old bot authorization</summary>
@@ -243,6 +247,6 @@
     <button class="disconnect hidden" id="disconnect">disconnect wallet</button>
   </footer>
   <noscript>This page needs JavaScript to read the chain and connect your wallet.</noscript>
-  <script type="module" src="/lib/auction.js?v=16f77f231f"></script>
+  <script type="module" src="/lib/auction.js?v=67cbeaf248"></script>
 </body>
 </html>

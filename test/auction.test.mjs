@@ -5,7 +5,7 @@ import { Wallet, TypedDataEncoder, keccak256, concat } from "ethers";
 import { CosmosTxV1Beta1TxPb as Pb, getInjectiveAddress } from "@injectivelabs/sdk-ts";
 import { injToWei, joinTxId, extractJoinKey, joinMsg, selfSendMsg, presign, simulationBytes,
   simulateSigned, watchRoundOpen, broadcastEverywhere, waitForTx, fromBase64, fetchAccount, sleep } from "../src/auction/presign.mjs";
-import { validateHeader, assertTarget, MAINNET } from "../src/auction/buyback.mjs";
+import { validateHeader, assertTarget, readUserRound, MAINNET } from "../src/auction/buyback.mjs";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -29,6 +29,34 @@ const signatureBytes = () => {
 test("amounts remain exact and malformed decimals cannot be silently truncated", () => {
   assert.equal(injToWei("75.000000000000000001"), "75000000000000000001");
   for (const value of ["-1", "1e3", ".5", "0.0000000000000000001", "NaN", "1.2.3"]) assert.throws(() => injToWei(value));
+});
+
+test("missing participation uses the raw storage key and returns null without a failing smart query", async () => {
+  let calls = 0;
+  globalThis.fetch = async (url) => {
+    calls++;
+    const path = new URL(url).pathname;
+    assert.ok(path.includes("/raw/"));
+    const key = Buffer.from(decodeURIComponent(path.split("/").at(-1)), "base64");
+    assert.equal(key.subarray(0, 19).toString("hex"), "000f757365725f726f756e645f696e666f0008");
+    assert.equal(key.readBigUInt64BE(19), 14n);
+    assert.equal(key.subarray(27).toString(), address);
+    return json({ data: null });
+  };
+  assert.equal(await readUserRound("https://one", 14, address), null);
+  assert.equal(calls, 1);
+});
+
+test("participation lookup preserves real claim data and rejects mismatched or malformed records", async () => {
+  const user = { wallet: address, round_id: 14, deposit: "20300000000000000000", has_withdrawn: false, earn_basket: [] };
+  globalThis.fetch = async () => json({ data: Buffer.from(JSON.stringify(user)).toString("base64") });
+  assert.deepEqual(await readUserRound("https://one", 14, address), user);
+  user.round_id = 13;
+  await assert.rejects(readUserRound("https://one", 14, address), /Unrecognized participation/);
+  globalThis.fetch = async () => json({});
+  await assert.rejects(readUserRound("https://one", 14, address), /Invalid participation response/);
+  globalThis.fetch = async () => json({ message: "node failed" }, 500);
+  await assert.rejects(readUserRound("https://one", 14, address), /node failed/);
 });
 
 test("join_pool uses the reviewed HMAC format and exact funds", () => {

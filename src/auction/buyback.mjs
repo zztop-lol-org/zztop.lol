@@ -53,6 +53,28 @@ export async function smart(ep, query, signal) {
   return (await getJSON(ep, base + "/smart/" + encodeURIComponent(btoa(JSON.stringify(query))), { signal })).data;
 }
 
+// v0.0.6 uses Map<(u64, Addr), UserRoundInfo>. Its smart query deliberately
+// throws for a missing participant, surfaced by LCDs as HTTP 500. Reading the
+// same public storage key returns HTTP 200 with data:null for that normal case.
+export async function readUserRound(ep, roundId, address, signal) {
+  if (!Number.isSafeInteger(roundId) || roundId < 1 || !/^inj1[0-9a-z]{38}$/.test(address)) throw new Error("Invalid participation lookup");
+  const encode = new TextEncoder();
+  const prefix = new Uint8Array([0, 15, ...encode.encode("user_round_info"), 0, 8]);
+  const key = new Uint8Array(prefix.length + 8 + address.length);
+  key.set(prefix);
+  new DataView(key.buffer).setBigUint64(prefix.length, BigInt(roundId));
+  key.set(encode.encode(address), prefix.length + 8);
+  const path = base + "/raw/" + encodeURIComponent(btoa(String.fromCharCode(...key)));
+  const j = await getJSON(ep, path, { signal });
+  if (j.data === null || j.data === "") return null;
+  if (typeof j.data !== "string") throw new Error("Invalid participation response");
+  const user = JSON.parse(new TextDecoder().decode(fromBase64(j.data)));
+  if (user.wallet !== address || Number(user.round_id) !== roundId || !/^\d+$/.test(user.deposit) || typeof user.has_withdrawn !== "boolean") {
+    throw new Error("Unrecognized participation record");
+  }
+  return user;
+}
+
 export async function loadSnapshot(ep, signal) {
   const [header, contract, module, latest, config] = await Promise.all([
     freshHeader(ep, MAINNET.chainId, signal), getJSON(ep, base, { signal }),

@@ -359,8 +359,7 @@
       { text: "ZZSTAKE",    href: "/stake",                               row: -3, order: 2, internal: true },
       { text: "ZZCHART",    href: "https://pump.trippyinj.xyz/launch/382", row: -4, order: 3 },
       { text: "ZZBRIDGE",   href: "/bridge",                              row: -5, order: 4, internal: true },
-      // hidden while zzauction is paused — put it back with row: -6, order: 5, and drop the block 0.6em (see settle)
-      // { text: "ZZAUCTION",  href: "/auction",                             row: -6, order: 5, internal: true },
+      { text: "ZZAUCTION",  href: "/auction",                             row: -6, order: 5, internal: true },
     ];
     const linkRows = LINKS.map((L) => {
       const a = document.createElement("a");
@@ -442,7 +441,7 @@
       const recenter = smooth(seg(p, 0.50, 0.74));
       const settle = smooth(seg(p, 0.74, 0.94));   // drop the group so the rows above balance
       word.style.transform =
-        `translate(${(nOffset * recenter).toFixed(2)}px, ${(3.0 * settle).toFixed(3)}em)`;   // 0.6em per link row: 3.6 with six
+        `translate(${(nOffset * recenter).toFixed(2)}px, ${(3.6 * settle).toFixed(3)}em)`;
 
       sides.forEach(({ el, dir, k }) => {
         const start = 0.50 + (k - 1) * 0.03;         // inner z's spread first

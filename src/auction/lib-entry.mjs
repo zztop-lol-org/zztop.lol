@@ -1,13 +1,6 @@
-// Browser bundle for /auction.
-//
-// Composes the two grants a bidding bot needs and gets them signed by an EVM
-// wallet. Injective accepts Cosmos messages from Ethereum wallets by converting
-// the tx to EIP-712 typed data, which the wallet signs with eth_signTypedData_v4;
-// the recovered pubkey then goes into a normal Cosmos tx carrying a Web3
-// extension. Flow per Injective docs: prepare -> sign -> broadcast.
-//
-// Both grants share one expiration so the fee allowance can never outlive the
-// authorization it exists to pay for.
+// Shared EIP-712 sender used by /bridge and legacy grant-revocation builders.
+// All transaction bodies and signed contexts deliberately have empty memos.
+// The active buyback UI uses presign.mjs; it never creates a bot authorization.
 import {
   MsgGrantWithAuthorization,
   MsgGrantAllowance,
@@ -139,7 +132,6 @@ export async function sendGrantTxs({
   restEndpoint,
   chainId,
   evmChainId,
-  memo = "zzauction grant",
   signTypedData,
   onStep,
 }) {
@@ -148,7 +140,7 @@ export async function sendGrantTxs({
     if (onStep) onStep(i, groups.length, groups[i].label);
     results.push(await sendOne({
       ethereumAddress, injectiveAddress, msgs: groups[i].msgs,
-      restEndpoint, chainId, evmChainId, memo, signTypedData,
+      restEndpoint, chainId, evmChainId, signTypedData,
     }));
   }
   return results;
@@ -161,7 +153,6 @@ async function sendOne({
   restEndpoint,
   chainId,
   evmChainId,
-  memo,
   signTypedData,
   fee = getDefaultStdFee(),
 }) {
@@ -173,7 +164,7 @@ async function sendOne({
   const eip712TypedData = getEip712TypedDataV2({
     msgs,
     tx: {
-      memo,
+      memo: "",
       accountNumber: baseAccount.accountNumber.toString(),
       sequence: baseAccount.sequence.toString(),
       timeoutHeight: timeoutHeight.toFixed(),
@@ -199,7 +190,7 @@ async function sendOne({
 
   const { txRaw } = createTransaction({
     message: msgs,
-    memo,
+    memo: "",
     // MUST match the typed data we signed. getEip712TypedDataV2 produces the V2 payload
     // (msgs as a JSON string); SIGN_AMINO/SIGN_EIP712 are both 127, which makes the chain
     // rebuild the LEGACY payload instead and the signature then fails to verify with
@@ -290,6 +281,6 @@ export async function sendClaim({
   const fee = { amount: [{ denom: "inj", amount: (BigInt(gas) * GAS_PRICE).toString() }], gas: String(gas) };
   return sendOne({
     ethereumAddress, injectiveAddress, msgs, restEndpoint, chainId, evmChainId,
-    memo: "zzauction claim", signTypedData, fee,
+    signTypedData, fee,
   });
 }

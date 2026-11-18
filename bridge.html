@@ -337,7 +337,7 @@
     var maxMode = false;
     var bal = { eth: {}, weth: 0n, ethNative: null, inj: {}, injGas: 0n };
     var busy = false, sdk = null;
-    var BUNDLE = "/lib/bridge.js?v=7c07378bd5";   // rewritten by src/bridge/stamp.mjs on every build
+    var BUNDLE = "/lib/bridge.js?v=eeaa72b894";   // rewritten by src/bridge/stamp.mjs on every build
     // Where the funds land. null means the connected wallet itself. Otherwise a 20-byte
     // address, typed in or taken from another wallet — the same 20 bytes are the inj1
     // account on Injective and the 0x address on Ethereum.
@@ -1021,7 +1021,7 @@
       var res = await sdk.sendTxs({
         ethereumAddress: account, injectiveAddress: injAddress,
         groups: [{ label: "withdraw", msgs: [m] }],
-        restEndpoint: picked.endpoint, chainId: CHAIN_ID, evmChainId: EVM_CHAIN_ID, memo: "zzbridge",
+        restEndpoint: picked.endpoint, chainId: CHAIN_ID, evmChainId: EVM_CHAIN_ID,
         signTypedData: function (addr, json) { return selectedProvider.request({ method: "eth_signTypedData_v4", params: [addr, json] }); },
       });
       var r = res && res[0];
